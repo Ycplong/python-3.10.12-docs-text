@@ -1,0 +1,947 @@
+异常处理
+********
+
+The functions described in this chapter will let you handle and raise
+Python exceptions.  It is important to understand some of the basics
+of Python exception handling.  It works somewhat like the POSIX
+"errno" variable: there is a global indicator (per thread) of the last
+error that occurred.  Most C API functions don't clear this on
+success, but will set it to indicate the cause of the error on
+failure.  Most C API functions also return an error indicator, usually
+"NULL" if they are supposed to return a pointer, or "-1" if they
+return an integer (exception: the "PyArg_*" functions return "1" for
+success and "0" for failure).
+
+具体地说，错误指示器由三个对象指针组成：异常的类型，异常的值，和回溯对
+象。如果没有错误被设置，这些指针都可以是 "NULL" （尽管一些组合使禁止的
+，例如，如果异常类型是 "NULL"，你不能有一个非 "NULL" 的回溯）。
+
+当一个函数由于它调用的某个函数失败而必须失败时，通常不会设置错误指示器
+；它调用的那个函数已经设置了它。而它负责处理错误和清理异常，或在清除其
+拥有的所有资源后返回（如对象应用或内存分配）。如果不准备处理异常，则 *
+不* 应该正常地继续。如果是由于一个错误返回，那么一定要向调用者表明已经
+设置了错误。如果错误没有得到处理或小心传播，对 Python/C API的其它调用
+可能不会有预期的行为，并且可能会以某种神秘的方式失败。
+
+注解:
+
+  错误指示器 **不是** "sys.exc_info()" 的执行结果。前者对应尚未捕获的
+  异常（异常还在传播），而后者在捕获异常后返回这个异常（异常已经停止传
+  播）。
+
+
+打印和清理
+==========
+
+void PyErr_Clear()
+    * Part of the Stable ABI.*
+
+   清除错误指示器。如果没有设置错误指示器，则不会有作用。
+
+void PyErr_PrintEx(int set_sys_last_vars)
+    * Part of the Stable ABI.*
+
+   将标准回溯打印到 "sys.stderr" 并清除错误指示器。**除非** 错误是
+   "SystemExit"，这种情况下不会打印回溯进程，且会退出 Python 进程，并
+   显示 "SystemExit" 实例指定的错误代码。
+
+   只有在错误指示器被设置时才需要调用这个函数，否则这会导致错误！
+
+   如果 *set_sys_last_vars* 非零，则变量 "sys.last_type"，
+   "sys.last_value" 和 "sys.last_traceback" 将分别设置为打印异常的类型
+   ，值和回溯。
+
+void PyErr_Print()
+    * Part of the Stable ABI.*
+
+   "PyErr_PrintEx(1)" 的别名。
+
+void PyErr_WriteUnraisable(PyObject *obj)
+    * Part of the Stable ABI.*
+
+   使用当前异常和 *obj* 参数调用 "sys.unraisablehook()"。
+
+   当设置了异常，但解释器不可能实际地触发异常时，这个实用函数向
+   "sys.stderr" 打印一个警告信息。例如，当 "__del__()" 方法中发生异常
+   时使用这个函数。
+
+   该函数使用单个参数 *obj* 进行调用，该参数标识发生不可触发异常的上下
+   文。如果可能，*obj* 的报告将打印在警告消息中。
+
+   调用此函数时必须设置一个异常。
+
+
+抛出异常
+========
+
+这些函数可帮助你设置当前线程的错误指示器。为了方便起见，一些函数将始终
+返回 "NULL" 指针，以便用于 "return" 语句。
+
+void PyErr_SetString(PyObject *type, const char *message)
+    * Part of the Stable ABI.*
+
+   这是设置错误标记最常用的方式。 第一个参数指定异常类型；它通常为某个
+   标准异常，例如 "PyExc_RuntimeError"。 你不需要增加它的引用计数。 第
+   二个参数是错误消息；它是用 "'utf-8'" 解码的。
+
+void PyErr_SetObject(PyObject *type, PyObject *value)
+    * Part of the Stable ABI.*
+
+   此函数类似于 "PyErr_SetString()"，但是允许你为异常的“值”指定任意一
+   个 Python 对象。
+
+PyObject *PyErr_Format(PyObject *exception, const char *format, ...)
+    *Return value: Always NULL.** Part of the Stable ABI.*
+
+   这个函数设置了一个错误指示器并且返回了 "NULL"，*exception* 应当是一
+   个 Python 中的异常类。*format* 和随后的形参会帮助格式化这个错误的信
+   息；它们与 "PyUnicode_FromFormat()" 有着相同的含义和值。*format* 是
+   一个ASCII编码的字符串。
+
+PyObject *PyErr_FormatV(PyObject *exception, const char *format, va_list vargs)
+    *Return value: Always NULL.** Part of the Stable ABI since version
+   3.5.*
+
+   和 "PyErr_Format()" 相同，但它接受一个 "va_list" 类型的参数而不是可
+   变数量的参数集。
+
+   3.5 新版功能.
+
+void PyErr_SetNone(PyObject *type)
+    * Part of the Stable ABI.*
+
+   这是 "PyErr_SetObject(type, Py_None)" 的简写。
+
+int PyErr_BadArgument()
+    * Part of the Stable ABI.*
+
+   这是 "PyErr_SetString(PyExc_TypeError, message)" 的简写，其中
+   *message* 指出使用了非法参数调用内置操作。它主要用于内部使用。
+
+PyObject *PyErr_NoMemory()
+    *Return value: Always NULL.** Part of the Stable ABI.*
+
+   这是 "PyErr_SetNone(PyExc_MemoryError)" 的简写；它返回 "NULL" ，以
+   便当内存耗尽时，对象分配函数可以写 "return PyErr_NoMemory();" 。
+
+PyObject *PyErr_SetFromErrno(PyObject *type)
+    *Return value: Always NULL.** Part of the Stable ABI.*
+
+   这是个便捷函数，当 C 库函数返回错误并设置 "errno" 时，这个函数会触
+   发异常。它构造一个元组对象，其第一项是整数值 "errno"，第二项是相应
+   的错误消息（从 "strerror()" 获取），然后调用 "PyErr_SetObject(type,
+   object)"。在 Unix 上，当 "errno" 值是 "EINTR" ，即中断的系统调用时
+   ，这个函数会调用 "PyErr_CheckSignals()" ，如果设置了错误指示器，则
+   将其设置为该值。该函数永远返回 "NULL" ，因此当系统调用返回错误时，
+   围绕系统调用的包装函数可以写成 "return PyErr_SetFromErrno(type);"。
+
+PyObject *PyErr_SetFromErrnoWithFilenameObject(PyObject *type, PyObject *filenameObject)
+    *Return value: Always NULL.** Part of the Stable ABI.*
+
+   类似于 "PyErr_SetFromErrno()" ，附加的行为是如果 *filenameObject*
+   不为 "NULL" ，它将作为第三个参数传递给 *type* 的构造函数。举个例子
+   ，在 "OSError" 异常中，*filenameObject* 将用来定义异常实例的
+   "filename" 属性。
+
+PyObject *PyErr_SetFromErrnoWithFilenameObjects(PyObject *type, PyObject *filenameObject, PyObject *filenameObject2)
+    *Return value: Always NULL.** Part of the Stable ABI since version
+   3.7.*
+
+   类似于 "PyErr_SetFromErrnoWithFilenameObject()" ，但接受第二个
+   filename 对象，用于当一个接受两个 filename 的函数失败时触发错误。
+
+   3.4 新版功能.
+
+PyObject *PyErr_SetFromErrnoWithFilename(PyObject *type, const char *filename)
+    *Return value: Always NULL.** Part of the Stable ABI.*
+
+   类似于 "PyErr_SetFromErrnoWithFilenameObject()"，但文件名以 C 字符
+   串形式给出。 *filename* 是用 *filesystem encoding and error
+   handler* 解码的。
+
+PyObject *PyErr_SetFromWindowsErr(int ierr)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   This is a convenience function to raise "WindowsError". If called
+   with *ierr* of "0", the error code returned by a call to
+   "GetLastError()" is used instead.  It calls the Win32 function
+   "FormatMessage()" to retrieve the Windows description of error code
+   given by *ierr* or "GetLastError()", then it constructs a tuple
+   object whose first item is the *ierr* value and whose second item
+   is the corresponding error message (gotten from "FormatMessage()"),
+   and then calls "PyErr_SetObject(PyExc_WindowsError, object)". This
+   function always returns "NULL".
+
+   可用性: Windows。
+
+PyObject *PyErr_SetExcFromWindowsErr(PyObject *type, int ierr)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   类似于 "PyErr_SetFromWindowsErr()" ，额外的参数指定要触发的异常类型
+   。
+
+   可用性: Windows。
+
+PyObject *PyErr_SetFromWindowsErrWithFilename(int ierr, const char *filename)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   类似于 "PyErr_SetFromWindowsErrWithFilenameObject()" ，但是
+   filename 是以 C 字符串形式给出的。 *filename* 是从文件系统编码（
+   "os.fsdecode()"）解码出来的。
+
+   可用性: Windows。
+
+PyObject *PyErr_SetExcFromWindowsErrWithFilenameObject(PyObject *type, int ierr, PyObject *filename)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   类似于 "PyErr_SetFromWindowsErrWithFilenameObject()" ，额外参数指定
+   要触发的异常类型。
+
+   可用性: Windows。
+
+PyObject *PyErr_SetExcFromWindowsErrWithFilenameObjects(PyObject *type, int ierr, PyObject *filename, PyObject *filename2)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   类似于 "PyErr_SetExcFromWindowsErrWithFilenameObject()" ，但是接受
+   第二个 filename 对象。
+
+   可用性: Windows。
+
+   3.4 新版功能.
+
+PyObject *PyErr_SetExcFromWindowsErrWithFilename(PyObject *type, int ierr, const char *filename)
+    *Return value: Always NULL.** Part of the Stable ABI on Windows
+   since version 3.7.*
+
+   类似于 "PyErr_SetFromWindowsErrWithFilename()" ，额外参数指定要触发
+   的异常类型。
+
+   可用性: Windows。
+
+PyObject *PyErr_SetImportError(PyObject *msg, PyObject *name, PyObject *path)
+    *Return value: Always NULL.** Part of the Stable ABI since version
+   3.7.*
+
+   这是触发 "ImportError" 的便捷函数。 *msg* 将被设为异常的消息字符串
+   。 *name* 和 *path* ，（都可以为 "NULL" ），将用来被设置
+   "ImportError" 对应的属性 "name" 和 "path"。
+
+   3.3 新版功能.
+
+PyObject *PyErr_SetImportErrorSubclass(PyObject *exception, PyObject *msg, PyObject *name, PyObject *path)
+    *Return value: Always NULL.** Part of the Stable ABI since version
+   3.6.*
+
+   和 "PyErr_SetImportError()" 很类似，但这个函数允许指定一个
+   "ImportError" 的子类来触发。
+
+   3.6 新版功能.
+
+void PyErr_SyntaxLocationObject(PyObject *filename, int lineno, int col_offset)
+
+   设置当前异常的文件，行和偏移信息。如果当前异常不是 "SyntaxError" ，
+   则它设置额外的属性，使异常打印子系统认为异常是 "SyntaxError"。
+
+   3.4 新版功能.
+
+void PyErr_SyntaxLocationEx(const char *filename, int lineno, int col_offset)
+    * Part of the Stable ABI since version 3.7.*
+
+   类似于 "PyErr_SyntaxLocationObject()"，但 *filename* 是用
+   *filesystem encoding and error handler* 解码的字节串。
+
+   3.2 新版功能.
+
+void PyErr_SyntaxLocation(const char *filename, int lineno)
+    * Part of the Stable ABI.*
+
+   类似于 "PyErr_SyntaxLocationEx()"，但省略了 *col_offset* parameter
+   形参。
+
+void PyErr_BadInternalCall()
+    * Part of the Stable ABI.*
+
+   这是 "PyErr_SetString(PyExc_SystemError, message)" 的缩写，其中
+   *message* 表示使用了非法参数调用内部操作（例如，Python/C API 函数）
+   。它主要用于内部使用。
+
+
+发出警告
+========
+
+这些函数可以从 C 代码中发出警告。它们仿照了由 Python 模块 "warnings"
+导出的那些函数。它们通常向 *sys.stderr* 打印一条警告信息；当然，用户也
+有可能已经指定将警告转换为错误，在这种情况下，它们将触发异常。也有可能
+由于警告机制出现问题，使得函数触发异常。如果没有触发异常，返回值为 "0"
+；如果触发异常，返回值为 "-1"。（无法确定是否实际打印了警告信息，也无
+法确定异常触发的原因。这是故意为之）。如果触发了异常，调用者应该进行正
+常的异常处理（例如，"Py_DECREF()" 持有引用并返回一个错误值）。
+
+int PyErr_WarnEx(PyObject *category, const char *message, Py_ssize_t stack_level)
+    * Part of the Stable ABI.*
+
+   发出一个警告信息。参数 *category* 是一个警告类别（见下面）或 "NULL"
+   ； *message* 是一个 UTF-8 编码的字符串。 *stack_level* 是一个给出栈
+   帧数量的正数；警告将从该栈帧中当前正在执行的代码行发出。
+   *stack_level* 为 1 的是调用 "PyErr_WarnEx()" 的函数，2 是在此之上的
+   函数，以此类推。
+
+   警告类别必须是 "PyExc_Warning" 的子类， "PyExc_Warning" 是
+   "PyExc_Exception" 的子类；默认警告类别是 "PyExc_RuntimeWarning" 。
+   标准 Python 警告类别作为全局变量可用，所有其名称见 标准警告类别 。
+
+   有关警告控制的信息，参见模块文档 "warnings" 和命令行文档中的 "-W"
+   选项。没有用于警告控制的 C API。
+
+int PyErr_WarnExplicitObject(PyObject *category, PyObject *message, PyObject *filename, int lineno, PyObject *module, PyObject *registry)
+
+   发出一个对所有警告属性进行显式控制的警告消息。 这是位于 Python 函数
+   "warnings.warn_explicit()" 外层的直接包装；请查看其文档了解详情。
+   *module* 和 *registry* 参数可被设为 "NULL" 以得到相关文档所描述的默
+   认效果。
+
+   3.4 新版功能.
+
+int PyErr_WarnExplicit(PyObject *category, const char *message, const char *filename, int lineno, const char *module, PyObject *registry)
+    * Part of the Stable ABI.*
+
+   类似于 "PyErr_WarnExplicitObject()" 不过 *message* 和 *module* 是
+   UTF-8 编码的字符串，而 *filename* 是由 *filesystem encoding and
+   error handler* 解码的。
+
+int PyErr_WarnFormat(PyObject *category, Py_ssize_t stack_level, const char *format, ...)
+    * Part of the Stable ABI.*
+
+   类似于 "PyErr_WarnEx()" 的函数，但使用 "PyUnicode_FromFormat()" 来
+   格式化警告消息。 *format* 是使用 ASCII 编码的字符串。
+
+   3.2 新版功能.
+
+int PyErr_ResourceWarning(PyObject *source, Py_ssize_t stack_level, const char *format, ...)
+    * Part of the Stable ABI since version 3.6.*
+
+   类似于 "PyErr_WarnFormat()" 的函数，但 *category* 是
+   "ResourceWarning" 并且它会将 *source* 传给
+   "warnings.WarningMessage()"。
+
+   3.6 新版功能.
+
+
+查询错误指示器
+==============
+
+PyObject *PyErr_Occurred()
+    *Return value: Borrowed reference.** Part of the Stable ABI.*
+
+   Test whether the error indicator is set.  If set, return the
+   exception *type* (the first argument to the last call to one of the
+   "PyErr_Set*" functions or to "PyErr_Restore()").  If not set,
+   return "NULL".  You do not own a reference to the return value, so
+   you do not need to "Py_DECREF()" it.
+
+   呼叫者必须持有GIL。
+
+   注解:
+
+     不要将返回值与特定的异常进行比较；请改为使用
+     "PyErr_ExceptionMatches()"，如下所示。 （比较很容易失败因为对于类
+     异常来说，异常可能是一个实例而不是类，或者它可能是预期的异常的一
+     个子类。）
+
+int PyErr_ExceptionMatches(PyObject *exc)
+    * Part of the Stable ABI.*
+
+   等价于 "PyErr_GivenExceptionMatches(PyErr_Occurred(), exc)"。 此函
+   数应当只在实际设置了异常时才被调用；如果没有任何异常被引发则将发生
+   非法内存访问。
+
+int PyErr_GivenExceptionMatches(PyObject *given, PyObject *exc)
+    * Part of the Stable ABI.*
+
+   如果 *given* 异常与 *exc* 中的异常类型相匹配则返回真值。 如果 *exc*
+   是一个类对象，则当 *given* 是一个子类的实例时也将返回真值。 如果
+   *exc* 是一个元组，则该元组（以及递归的子元组）中的所有异常类型都将
+   被搜索进行匹配。
+
+void PyErr_Fetch(PyObject **ptype, PyObject **pvalue, PyObject **ptraceback)
+    * Part of the Stable ABI.*
+
+   将错误指示符提取到三个变量中并传递其地址。 如果未设置错误指示符，则
+   将三个变量都设为 "NULL"。 如果已设置，则将其清除并且你将得到对所提
+   取的每个对象的引用。 值和回溯对象可以为 "NULL" 即使类型对象不为空。
+
+   注解:
+
+     此函数通常只被需要捕获异常的代码或需要临时保存和恢复错误指示符的
+     代码所使用，例如:
+
+        {
+           PyObject *type, *value, *traceback;
+           PyErr_Fetch(&type, &value, &traceback);
+
+           /* ... code that might produce other errors ... */
+
+           PyErr_Restore(type, value, traceback);
+        }
+
+void PyErr_Restore(PyObject *type, PyObject *value, PyObject *traceback)
+    * Part of the Stable ABI.*
+
+   基于三个对象设置错误指示符。 如果错误指示符已设置，它将首先被清除。
+   如果三个对象均为 "NULL"，错误指示器将被清除。 请不要传入 "NULL" 类
+   型和非 "NULL" 值或回溯。 异常类型应当是一个类。 请不要传入无效的异
+   常类型或值。 （违反这些规则将导致微妙的后续问题。） 此调用会带走对
+   每个对象的引用：你必须在调用之前拥有对每个对象的引用且在调用之后你
+   将不再拥有这些引用。 （如果你不理解这一点，就不要使用此函数。 勿谓
+   言之不预。）
+
+   注解:
+
+     此函数通常只被需要临时保存和恢复错误指示符的代码所使用。 请使用
+     "PyErr_Fetch()" 来保存当前的错误指示符。
+
+void PyErr_NormalizeException(PyObject **exc, PyObject **val, PyObject **tb)
+    * Part of the Stable ABI.*
+
+   在特定情况下，下面 "PyErr_Fetch()" 所返回的值可以是“非正规化的”，即
+   "*exc" 是一个类对象而 "*val" 不是同一个类的实例。 在这种情况下此函
+   数可以被用来实例化类。 如果值已经是正规化的，则不做任何操作。 实现
+   这种延迟正规化是为了提升性能。
+
+   注解:
+
+     此函数 *不会* 显式地在异常值上设置 "__traceback__" 属性。 如果想
+     要适当地设置回溯，还需要以下附加代码片段:
+
+        if (tb != NULL) {
+          PyException_SetTraceback(val, tb);
+        }
+
+void PyErr_GetExcInfo(PyObject **ptype, PyObject **pvalue, PyObject **ptraceback)
+    * Part of the Stable ABI since version 3.7.*
+
+   提取异常信息，即从 "sys.exc_info()" 所得到的。 这是指一个 *已被捕获
+   * 的异常，而不是刚被引发的异常。 返回分别指向三个对象的新引用，其中
+   任何一个均可以为 "NULL"。 不会修改异常信息的状态。
+
+   注解:
+
+     此函数通常不会被需要处理异常的代码所使用。 它被使用的场合是在代码
+     需要临时保存并恢复异常状态的时候。 请使用 "PyErr_SetExcInfo()" 来
+     恢复或清除异常状态。
+
+   3.3 新版功能.
+
+void PyErr_SetExcInfo(PyObject *type, PyObject *value, PyObject *traceback)
+    * Part of the Stable ABI since version 3.7.*
+
+   设置异常信息，即从 "sys.exc_info()" 所得到的。 这是指一个 *已被捕获
+   * 的异常，而不是刚被引发的异常。 此函数会偷取对参数的引用。 要清空
+   异常状态，请为所有三个参数传入 "NULL"。 对于有关三个参数的一般规则
+   ，请参阅 "PyErr_Restore()"。
+
+   注解:
+
+     此函数通常不会被需要处理异常的代码所使用。 它被使用的场合是在代码
+     需要临时保存并恢复异常状态的情况。 请使用 "PyErr_GetExcInfo()" 来
+     读取异常状态。
+
+   3.3 新版功能.
+
+
+信号处理
+========
+
+int PyErr_CheckSignals()
+    * Part of the Stable ABI.*
+
+   这个函数与Python的信号处理交互。
+
+   如果在主 Python 解释器下从主线程调用该函数，它将检查是否向进程发送
+   了信号，如果是，则发起调用相应的信号处理句柄。 如果支持 "signal" 模
+   块，则可以发起调用以 Python 编写的信号处理句柄。
+
+   该函数会尝试处理所有待处理信号，然后返回 "0"。 但是，如果 Python 信
+   号处理句柄引发了异常，则设置错误指示符并且函数将立即返回 "-1" (这样
+   其他待处理信号可能还没有被处理：它们将在下次发起调用
+   "PyErr_CheckSignals()" 时被处理)。
+
+   如果函数从非主线程调用，或在非主Python解释器下调用，则它不执行任何
+   操作并返回0。
+
+   这个函数可以由希望被用户请求(例如按Ctrl-C)中断的长时间运行的C代码调
+   用。
+
+   注解:
+
+     针对 "SIGINT" 的默认 Python 信号处理句柄会引发
+     "KeyboardInterrupt" 异常。
+
+void PyErr_SetInterrupt()
+    * Part of the Stable ABI.*
+
+   模拟一个 "SIGINT" 信号到达的效果。 这等价于
+   "PyErr_SetInterruptEx(SIGINT)"。
+
+   注解:
+
+     此函数是异步信号安全的。 它可以不带 *GIL* 并由 C 信号处理句柄来调
+     用。
+
+int PyErr_SetInterruptEx(int signum)
+    * Part of the Stable ABI since version 3.10.*
+
+   模拟一个信号到达的效果。 当下次 "PyErr_CheckSignals()" 被调用时，将
+   会调用针对指定的信号编号的 Python 信号处理句柄。
+
+   此函数可由自行设置信号处理，并希望 Python 信号处理句柄会在请求中断
+   时（例如当用户按下 Ctrl-C 来中断操作时）按照预期被发起调用的 C 代码
+   来调用。
+
+   如果给定的信号不是由 Python 来处理的 (即被设为 "signal.SIG_DFL" 或
+   "signal.SIG_IGN")，它将会被忽略。
+
+   如果 *signum* 在被允许的信号编号范围之外，将返回 "-1"。 在其他情况
+   下，则返回 "0"。 错误指示符绝不会被此函数所修改。
+
+   注解:
+
+     此函数是异步信号安全的。 它可以不带 *GIL* 并由 C 信号处理句柄来调
+     用。
+
+   3.10 新版功能.
+
+int PySignal_SetWakeupFd(int fd)
+
+   这个工具函数指定了一个每当收到信号时将被作为以单个字节的形式写入信
+   号编号的目标的文件描述符。 *fd* 必须是非阻塞的。 它将返回前一个这样
+   的文件描述符。
+
+   设置值 "-1" 将禁用该特性；这是初始状态。 这等价于 Python 中的
+   "signal.set_wakeup_fd()"，但是没有任何错误检查。 *fd* 应当是一个有
+   效的文件描述符。 此函数应当只从主线程来调用。
+
+   在 3.5 版更改: 在 Windows 上，此函数现在也支持套接字处理。
+
+
+Exception 类
+============
+
+PyObject *PyErr_NewException(const char *name, PyObject *base, PyObject *dict)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   这个工具函数会创建并返回一个新的异常类。 *name* 参数必须为新异常的
+   名称，是 "module.classname" 形式的 C 字符串。 *base* 和 *dict* 参数
+   通常为 "NULL"。 这将创建一个派生自 "Exception" 的类对象（在 C 中可
+   以通过 "PyExc_Exception" 访问）。
+
+   新类的 "__module__" 属性将被设为 *name* 参数的前半部分（最后一个点
+   号之前），而类名将被设为后半部分（最后一个点号之后）。 *base* 参数
+   可被用来指定替代基类；它可以是一个类或是一个由类组成的元组。 *dict*
+   参数可被用来指定一个由类变量和方法组成的字典。
+
+PyObject *PyErr_NewExceptionWithDoc(const char *name, const char *doc, PyObject *base, PyObject *dict)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   和 "PyErr_NewException()" 一样，除了可以轻松地给新的异常类一个文档
+   字符串：如果 *doc* 属性非空，它将用作异常类的文档字符串。
+
+   3.2 新版功能.
+
+
+异常对象
+========
+
+PyObject *PyException_GetTraceback(PyObject *ex)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   将与异常相关联的回溯作为一个新引用返回，可以通过 "__traceback__" 在
+   Python 中访问。 如果没有已关联的回溯，则返回 "NULL"。
+
+int PyException_SetTraceback(PyObject *ex, PyObject *tb)
+    * Part of the Stable ABI.*
+
+   将异常关联的回溯设置为 *tb* 。使用``Py_None``清除它。
+
+PyObject *PyException_GetContext(PyObject *ex)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   将与异常相关联的上下文（在处理 *ex* 的过程中引发的另一个异常实例）
+   作为一个新引用返回，可以通过 "__context__" 在 Python 中访问。 如果
+   没有已关联的上下文，则返回 "NULL"。
+
+void PyException_SetContext(PyObject *ex, PyObject *ctx)
+    * Part of the Stable ABI.*
+
+   将与异常相关联的上下文设置为 *ctx*。 使用 "NULL" 来清空它。 没有用
+   来确保 *ctx* 是一个异常实例的类型检查。 这将窃取一个指向 *ctx* 的引
+   用。
+
+PyObject *PyException_GetCause(PyObject *ex)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   将与异常相关联的原因（一个异常实例，或是 "None"，由 "raise ... from
+   ..." 设置）作为一个新引用返回，可在 Python 中通过 "__cause__" 来访
+   问。
+
+void PyException_SetCause(PyObject *ex, PyObject *cause)
+    * Part of the Stable ABI.*
+
+   将与异常相关联的原因设置为 *cause*。 使用 "NULL" 来清空它。 它没有
+   用来确保 *cause* 是一个异常实例或 "None" 的类型检查。 这将偷取一个
+   指向 *cause* 的引用。
+
+   "__suppress_context__" 会被此函数隐式地设为 "True"。
+
+
+Unicode 异常对象
+================
+
+下列函数被用于创建和修改来自 C 的 Unicode 异常。
+
+PyObject *PyUnicodeDecodeError_Create(const char *encoding, const char *object, Py_ssize_t length, Py_ssize_t start, Py_ssize_t end, const char *reason)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   创建一个 "UnicodeDecodeError" 对象并附带 *encoding*, *object*,
+   *length*, *start*, *end* 和 *reason* 等属性。 *encoding* 和
+   *reason* 为 UTF-8 编码的字符串。
+
+PyObject *PyUnicodeEncodeError_Create(const char *encoding, const Py_UNICODE *object, Py_ssize_t length, Py_ssize_t start, Py_ssize_t end, const char *reason)
+    *Return value: New reference.*
+
+   创建一个 "UnicodeEncodeError" 对象并附带 *encoding*, *object*,
+   *length*, *start*, *end* 和 *reason*。 *encoding* 和 *reason* 都是
+   以 UTF-8 编码的字符串。
+
+   3.3 版后已移除: 3.11"Py_UNICODE" 自 Python 3.3 起已被弃用。 请迁移
+   至 "PyObject_CallFunction(PyExc_UnicodeEncodeError, "sOnns", ...)"
+   。
+
+PyObject *PyUnicodeTranslateError_Create(const Py_UNICODE *object, Py_ssize_t length, Py_ssize_t start, Py_ssize_t end, const char *reason)
+    *Return value: New reference.*
+
+   创建一个 "UnicodeTranslateError" 对象并附带 *object*, *length*,
+   *start*, *end* 和 *reason*。 *reason* 是一个以 UTF-8 编码的字符串。
+
+   3.3 版后已移除: 3.11"Py_UNICODE" 自 Python 3.3 起已被弃用。 请迁移
+   至 "PyObject_CallFunction(PyExc_UnicodeTranslateError, "Onns",
+   ...)"。
+
+PyObject *PyUnicodeDecodeError_GetEncoding(PyObject *exc)
+PyObject *PyUnicodeEncodeError_GetEncoding(PyObject *exc)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   返回给定异常对象的 *encoding* 属性
+
+PyObject *PyUnicodeDecodeError_GetObject(PyObject *exc)
+PyObject *PyUnicodeEncodeError_GetObject(PyObject *exc)
+PyObject *PyUnicodeTranslateError_GetObject(PyObject *exc)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   返回给定异常对象的 *object* 属性
+
+int PyUnicodeDecodeError_GetStart(PyObject *exc, Py_ssize_t *start)
+int PyUnicodeEncodeError_GetStart(PyObject *exc, Py_ssize_t *start)
+int PyUnicodeTranslateError_GetStart(PyObject *exc, Py_ssize_t *start)
+    * Part of the Stable ABI.*
+
+   获取给定异常对象的 *start* 属性并将其放入 **start*。 *start* 必须不
+   为 "NULL"。 成功时返回 "0"，失败时返回 "-1"。
+
+int PyUnicodeDecodeError_SetStart(PyObject *exc, Py_ssize_t start)
+int PyUnicodeEncodeError_SetStart(PyObject *exc, Py_ssize_t start)
+int PyUnicodeTranslateError_SetStart(PyObject *exc, Py_ssize_t start)
+    * Part of the Stable ABI.*
+
+   将给定异常对象的 *start* 属性设为 *start*。 成功时返回 "0"，失败时
+   返回 "-1"。
+
+int PyUnicodeDecodeError_GetEnd(PyObject *exc, Py_ssize_t *end)
+int PyUnicodeEncodeError_GetEnd(PyObject *exc, Py_ssize_t *end)
+int PyUnicodeTranslateError_GetEnd(PyObject *exc, Py_ssize_t *end)
+    * Part of the Stable ABI.*
+
+   获取给定异常对象的 *end* 属性并将其放入 **end*。 *end* 必须不为
+   "NULL"。 成功时返回 "0"，失败时返回 "-1"。
+
+int PyUnicodeDecodeError_SetEnd(PyObject *exc, Py_ssize_t end)
+int PyUnicodeEncodeError_SetEnd(PyObject *exc, Py_ssize_t end)
+int PyUnicodeTranslateError_SetEnd(PyObject *exc, Py_ssize_t end)
+    * Part of the Stable ABI.*
+
+   将给定异常对象的 *end* 属性设为 *end*。 成功时返回 "0"，失败时返回
+   "-1"。
+
+PyObject *PyUnicodeDecodeError_GetReason(PyObject *exc)
+PyObject *PyUnicodeEncodeError_GetReason(PyObject *exc)
+PyObject *PyUnicodeTranslateError_GetReason(PyObject *exc)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   返回给定异常对象的 *reason* 属性
+
+int PyUnicodeDecodeError_SetReason(PyObject *exc, const char *reason)
+int PyUnicodeEncodeError_SetReason(PyObject *exc, const char *reason)
+int PyUnicodeTranslateError_SetReason(PyObject *exc, const char *reason)
+    * Part of the Stable ABI.*
+
+   将给定异常对象的 *reason* 属性设为 *reason*。 成功时返回 "0"，失败
+   时返回 "-1"。
+
+
+递归控制
+========
+
+这两个函数提供了一种在 C 层级上进行安全的递归调用的方式，在核心模块与
+扩展模块中均适用。 当递归代码不一定会发起调用 Python 代码（后者会自动
+跟踪其递归深度）时就需要用到它们。 它们对于 *tp_call* 实现来说也无必要
+因为 调用协议 会负责递归处理。
+
+int Py_EnterRecursiveCall(const char *where)
+    * Part of the Stable ABI since version 3.9.*
+
+   标记一个递归的 C 层级调用即将被执行的点位。
+
+   如果定义了 "USE_STACKCHECK"，此函数会使用 "PyOS_CheckStack()" 来检
+   查操作系统堆栈是否溢出。 在这种情况下，它将设置一个 "MemoryError"
+   并返回非零值。
+
+   随后此函数将检查是否达到递归限制。 如果是的话，将设置一个
+   "RecursionError" 并返回一个非零值。 在其他情况下，则返回零。
+
+   *where* 应为一个 UTF-8 编码的字符串如 "" in instance check""，它将
+   与由递归深度限制所导致的 "RecursionError" 消息相拼接。
+
+   在 3.9 版更改: 此函数现在也在受限 API 中可用。
+
+void Py_LeaveRecursiveCall(void)
+    * Part of the Stable ABI since version 3.9.*
+
+   结束一个 "Py_EnterRecursiveCall()"。 必须针对
+   "Py_EnterRecursiveCall()" 的每个 *成功的* 发起调用操作执行一次调用
+   。
+
+   在 3.9 版更改: 此函数现在也在受限 API 中可用。
+
+正确地针对容器类型实现 "tp_repr" 需要特别的递归处理。 在保护栈之外，
+"tp_repr" 还需要追踪对象以防止出现循环。 以下两个函数将帮助完成此功能
+。 从实际效果来说，这两个函数是 C 中对应 "reprlib.recursive_repr()" 的
+等价物。
+
+int Py_ReprEnter(PyObject *object)
+    * Part of the Stable ABI.*
+
+   在 "tp_repr" 实现的开头被调用以检测循环。
+
+   如果对象已经被处理，此函数将返回一个正整数。 在此情况下 "tp_repr"
+   实现应当返回一个指明发生循环的字符串对象。 例如，"dict" 对象将返回
+   "{...}" 而 "list" 对象将返回 "[...]"。
+
+   如果已达到递归限制则此函数将返回一个负正数。 在此情况下 "tp_repr"
+   实现通常应当返回 "NULL"。
+
+   在其他情况下，此函数将返回零而 "tp_repr" 实现将可正常继续。
+
+void Py_ReprLeave(PyObject *object)
+    * Part of the Stable ABI.*
+
+   结束一个 "Py_ReprEnter()"。 必须针对每个返回零的 "Py_ReprEnter()"
+   的发起调用操作调用一次。
+
+
+标准异常
+========
+
+All standard Python exceptions are available as global variables whose
+names are "PyExc_" followed by the Python exception name.  These have
+the type "PyObject*"; they are all class objects.  For completeness,
+here are all the variables:
+
++-------------------------------------------+-----------------------------------+------------+
+| C 名称                                    | Python 名称                       | 备注       |
+|===========================================|===================================|============|
+| "PyExc_BaseException"                     | "BaseException"                   | [1]        |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_Exception"                         | "Exception"                       | [1]        |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ArithmeticError"                   | "ArithmeticError"                 | [1]        |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_AssertionError"                    | "AssertionError"                  |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_AttributeError"                    | "AttributeError"                  |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_BlockingIOError"                   | "BlockingIOError"                 |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_BrokenPipeError"                   | "BrokenPipeError"                 |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_BufferError"                       | "BufferError"                     |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ChildProcessError"                 | "ChildProcessError"               |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ConnectionAbortedError"            | "ConnectionAbortedError"          |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ConnectionError"                   | "ConnectionError"                 |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ConnectionRefusedError"            | "ConnectionRefusedError"          |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ConnectionResetError"              | "ConnectionResetError"            |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_EOFError"                          | "EOFError"                        |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_FileExistsError"                   | "FileExistsError"                 |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_FileNotFoundError"                 | "FileNotFoundError"               |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_FloatingPointError"                | "FloatingPointError"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_GeneratorExit"                     | "GeneratorExit"                   |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ImportError"                       | "ImportError"                     |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_IndentationError"                  | "IndentationError"                |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_IndexError"                        | "IndexError"                      |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_InterruptedError"                  | "InterruptedError"                |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_IsADirectoryError"                 | "IsADirectoryError"               |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_KeyError"                          | "KeyError"                        |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_KeyboardInterrupt"                 | "KeyboardInterrupt"               |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_LookupError"                       | "LookupError"                     | [1]        |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_MemoryError"                       | "MemoryError"                     |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ModuleNotFoundError"               | "ModuleNotFoundError"             |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_NameError"                         | "NameError"                       |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_NotADirectoryError"                | "NotADirectoryError"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_NotImplementedError"               | "NotImplementedError"             |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_OSError"                           | "OSError"                         | [1]        |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_OverflowError"                     | "OverflowError"                   |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_PermissionError"                   | "PermissionError"                 |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ProcessLookupError"                | "ProcessLookupError"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_RecursionError"                    | "RecursionError"                  |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ReferenceError"                    | "ReferenceError"                  |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_RuntimeError"                      | "RuntimeError"                    |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_StopAsyncIteration"                | "StopAsyncIteration"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_StopIteration"                     | "StopIteration"                   |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_SyntaxError"                       | "SyntaxError"                     |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_SystemError"                       | "SystemError"                     |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_SystemExit"                        | "SystemExit"                      |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_TabError"                          | "TabError"                        |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_TimeoutError"                      | "TimeoutError"                    |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_TypeError"                         | "TypeError"                       |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnboundLocalError"                 | "UnboundLocalError"               |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnicodeDecodeError"                | "UnicodeDecodeError"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnicodeEncodeError"                | "UnicodeEncodeError"              |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnicodeError"                      | "UnicodeError"                    |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnicodeTranslateError"             | "UnicodeTranslateError"           |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ValueError"                        | "ValueError"                      |            |
++-------------------------------------------+-----------------------------------+------------+
+| "PyExc_ZeroDivisionError"                 | "ZeroDivisionError"               |            |
++-------------------------------------------+-----------------------------------+------------+
+
+3.3 新版功能: "PyExc_BlockingIOError", "PyExc_BrokenPipeError",
+"PyExc_ChildProcessError", "PyExc_ConnectionError",
+"PyExc_ConnectionAbortedError", "PyExc_ConnectionRefusedError",
+"PyExc_ConnectionResetError", "PyExc_FileExistsError",
+"PyExc_FileNotFoundError", "PyExc_InterruptedError",
+"PyExc_IsADirectoryError", "PyExc_NotADirectoryError",
+"PyExc_PermissionError", "PyExc_ProcessLookupError" and
+"PyExc_TimeoutError" 介绍如下 **PEP 3151**.
+
+3.5 新版功能: "PyExc_StopAsyncIteration" 和 "PyExc_RecursionError".
+
+3.6 新版功能: "PyExc_ModuleNotFoundError".
+
+这些是兼容性别名 "PyExc_OSError":
+
++---------------------------------------+------------+
+| C 名称                                | 备注       |
+|=======================================|============|
+| "PyExc_EnvironmentError"              |            |
++---------------------------------------+------------+
+| "PyExc_IOError"                       |            |
++---------------------------------------+------------+
+| "PyExc_WindowsError"                  | [2]        |
++---------------------------------------+------------+
+
+在 3.3 版更改: 这些别名曾经是单独的异常类型。
+
+注：
+
+[1] 这是其他标准异常的基类。
+
+[2] 仅在 Windows 中定义；检测是否定义了预处理程序宏 "MS_WINDOWS" ，以
+    便保护用到它的代码。
+
+
+标准警告类别
+============
+
+All standard Python warning categories are available as global
+variables whose names are "PyExc_" followed by the Python exception
+name. These have the type "PyObject*"; they are all class objects. For
+completeness, here are all the variables:
+
++--------------------------------------------+-----------------------------------+------------+
+| C 名称                                     | Python 名称                       | 备注       |
+|============================================|===================================|============|
+| "PyExc_Warning"                            | "Warning"                         | [3]        |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_BytesWarning"                       | "BytesWarning"                    |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_DeprecationWarning"                 | "DeprecationWarning"              |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_FutureWarning"                      | "FutureWarning"                   |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_ImportWarning"                      | "ImportWarning"                   |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_PendingDeprecationWarning"          | "PendingDeprecationWarning"       |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_ResourceWarning"                    | "ResourceWarning"                 |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_RuntimeWarning"                     | "RuntimeWarning"                  |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_SyntaxWarning"                      | "SyntaxWarning"                   |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_UnicodeWarning"                     | "UnicodeWarning"                  |            |
++--------------------------------------------+-----------------------------------+------------+
+| "PyExc_UserWarning"                        | "UserWarning"                     |            |
++--------------------------------------------+-----------------------------------+------------+
+
+3.2 新版功能: "PyExc_ResourceWarning".
+
+注：
+
+[3] 这是其他标准警告类别的基类。

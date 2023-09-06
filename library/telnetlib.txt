@@ -1,0 +1,210 @@
+"telnetlib" -- Telnet 客户端
+****************************
+
+**源代码：** Lib/telnetlib.py
+
+3.11 版后已移除: "telnetlib" 模块已被弃用（请参阅 **PEP 594** 了解详情
+及其替代品）。
+
+======================================================================
+
+"telnetlib" 模块提供一个实现Telnet协议的类 "Telnet"。关于此协议的细节
+请参见 **RFC 854** 。此外，它还为协议字符（见下文）和 telnet 选项提供
+了对应的符号常量。telnet选项对应的符号名遵循 "arpa/telnet.h" 中的定义
+，但删除了前缀 "TELOPT_"。对于不在 "arpa/telnet.h" 的选项的符号常量名
+，请参考本模块源码。
+
+telnet命令的符号常量名有： IAC, DONT, DO, WONT, WILL, SE
+(Subnegotiation End), NOP (No Operation), DM (Data Mark), BRK (Break),
+IP (Interrupt process), AO (Abort output), AYT (Are You There), EC
+(Erase Character), EL (Erase Line), GA (Go Ahead), SB (Subnegotiation
+Begin).
+
+class telnetlib.Telnet(host=None, port=0[, timeout])
+
+   "Telnet" 表示到 Telnet 服务器的连接. 实例初始化后默认不连接；必须使
+   用 "open()" 方法来建立连接。或者， 可选参数 host 和 port 也可以传递
+   给构造函数，在这种情况下，到服务器的连接将在构造函数返回前建立。可
+   选参数 *timeout* 为阻塞操作（如连接尝试）指定一个以秒为单位的超时时
+   间（如果没有指定，将使用全局默认设置） 。
+
+   不要重新打开一个已经连接的实例。
+
+   这个类有很多 "read_*()" 方法。 请注意，其中一些方法在读取结束时会触
+   发 "EOFError" 异常，这是由于连接对象可能出于其它原因返回一个空字符
+   串。 请参阅下面的个别描述。
+
+   "Telnet" 对象一个上下文管理器，可以在 "with" 语句中使用。当 "with"
+   块结束，"close()" 方法会被调用:
+
+      >>> from telnetlib import Telnet
+      >>> with Telnet('localhost', 23) as tn:
+      ...     tn.interact()
+      ...
+
+   在 3.6 版更改: 添加了上下文管理器的支持
+
+参见:
+
+  **RFC 854** - Telnet 协议规范
+     Telnet 协议的定义。
+
+
+Telnet 对象
+===========
+
+"Telnet" 实例有以下几种方法：
+
+Telnet.read_until(expected, timeout=None)
+
+   读取直到遇到给定字节串 *expected* 或 *timeout* 秒已经过去。
+
+   当没有找到匹配时，返回可用的内容，也可能返回空字节。如果连接已关闭
+   且没有可用的熟数据，将触发 "EOFError"。
+
+Telnet.read_all()
+
+   读取数据，直到遇到 EOF；连接关闭前都会保持阻塞。
+
+Telnet.read_some()
+
+   在达到 EOF 前，读取至少一个字节的熟数据。如果命中 EOF，返回 "b''"。
+   如果没有立即可用的数据，则阻塞。
+
+Telnet.read_very_eager()
+
+   在不阻塞 I/O 的情况下读取所有的内容（eager）。
+
+   如果连接已关闭并且没有可用的熟数据，将会触发 "EOFError" 。如果没有
+   熟数据可用返回 "b''"  。除非在一个 IAC 序列的中间，否则不要进行阻塞
+   。
+
+Telnet.read_eager()
+
+   读取现成的数据。
+
+   如果连接已关闭并且没有可用的熟数据，将会触发 "EOFError" 。如果没有
+   熟数据可用返回 "b''"  。除非在一个 IAC 序列的中间，否则不要进行阻塞
+   。
+
+Telnet.read_lazy()
+
+   处理并返回已经在队列中的数据（lazy）。
+
+   如果连接已关闭并且没有可用的数据，将会触发 "EOFError" 。如果没有熟
+   数据可用则返回 "b''" 。除非在一个 IAC 序列的中间，否则不要进行阻塞
+   。
+
+Telnet.read_very_lazy()
+
+   返回熟数据队列任何可用的数据（very lazy）。
+
+   如果连接已关闭并且没有可用的数据，将会触发 "EOFError" 。如果没有熟
+   数据可用则返回 "b''" 。该方法永远不会阻塞。
+
+Telnet.read_sb_data()
+
+   返回在 SB/SE 对之间收集的数据（子选项 begin/end）。当使用 "SE" 命令
+   调用回调函数时，该回调函数应该访问这些数据。该方法永远不会阻塞。
+
+Telnet.open(host, port=0[, timeout])
+
+   连接主机。第二个可选参数是端口号，默认为标准 Telnet 端口（23）。可
+   选参数 *timeout* 指定一个以秒为单位的超时时间用于像连接尝试这样的阻
+   塞操作（如果没有指定，将使用全局默认超时设置）。
+
+   不要尝试重新打开一个已经连接的实例。
+
+   触发 auditing event "telnetlib.Telnet.open" ，参数为 "self"，"host"
+   ，"port"。
+
+Telnet.msg(msg, *args)
+
+   当调试级别 ">" 0 时打印一条调试信息。如果存在额外参数，则它们会被替
+   换在使用标准字符串格式化操作符的信息中。
+
+Telnet.set_debuglevel(debuglevel)
+
+   设置调试级别。*debuglevel* 的值越高，得到的调试输出越多（在
+   "sys.stdout" ）。
+
+Telnet.close()
+
+   关闭连接对象。
+
+Telnet.get_socket()
+
+   返回内部使用的套接字对象。
+
+Telnet.fileno()
+
+   返回内部使用的套接字对象的文件描述符。
+
+Telnet.write(buffer)
+
+   向套接字写入一个字节字符串，将所有 IAC 字符加倍。如果连接被阻塞，这
+   可能也会阻塞。如果连接关闭可能触发 "OSError"。
+
+   触发 auditing event "telnetlib.Telnet.write" ，参数为 "self"，
+   "buffer"。
+
+   在 3.3 版更改: 曾经该函数抛出 "socket.error"，现在这是 "OSError" 的
+   别名。
+
+Telnet.interact()
+
+   交互函数，模拟一个非常笨拙的 Telnet 客户端。
+
+Telnet.mt_interact()
+
+   多线程版的 "interact()".
+
+Telnet.expect(list, timeout=None)
+
+   一直读取，直到匹配列表中的某个正则表达式。
+
+   第一个参数是一个正则表达式列表，可以是已编译的 (正则表达式对象)，也
+   可以是未编译的 (字节串)。 第二个可选参数是超时，单位是秒；默认一直
+   阻塞。
+
+   返回一个包含三个元素的元组：列表中的第一个匹配的正则表达式的索引；
+   返回的匹配对象；包括匹配在内的读取过的字节。
+
+   如果找到了文件的结尾且没有字节被读取，触发 "EOFError"。否则，当没有
+   匹配时,返回 "(-1, None, data)"，其中 *data* 是到目前为止接受到的字
+   节（如果发生超时，则可能是空字节）。
+
+   如果一个正则表达式以贪婪匹配结束（例如 ".*"），或者多个表达式可以匹
+   配同一个输出，则结果是不确定的，可能取决于 I/O 计时。
+
+Telnet.set_option_negotiation_callback(callback)
+
+   每次在输入流上读取 telnet 选项时，这个带有如下参数的 *callback* （
+   如果设置了）会被调用： callback(telnet socket, command
+   (DO/DONT/WILL/WONT), option)。telnetlib 之后不会再执行其它操作。
+
+
+Telnet 示例
+===========
+
+一个简单的说明性典型用法例子:
+
+   import getpass
+   import telnetlib
+
+   HOST = "localhost"
+   user = input("Enter your remote account: ")
+   password = getpass.getpass()
+
+   tn = telnetlib.Telnet(HOST)
+
+   tn.read_until(b"login: ")
+   tn.write(user.encode('ascii') + b"\n")
+   if password:
+       tn.read_until(b"Password: ")
+       tn.write(password.encode('ascii') + b"\n")
+
+   tn.write(b"ls\n")
+   tn.write(b"exit\n")
+
+   print(tn.read_all().decode('ascii'))

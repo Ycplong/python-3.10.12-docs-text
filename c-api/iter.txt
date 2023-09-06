@@ -1,0 +1,73 @@
+迭代器协议
+**********
+
+迭代器有两个函数。
+
+int PyIter_Check(PyObject *o)
+    * Part of the Stable ABI since version 3.8.*
+
+   如果对象Return non-zero if the object *o* 可以被安全把传给
+   "PyIter_Next()" 则返回非零值，否则返回 "0"。 此函数总是会成功执行。
+
+int PyAIter_Check(PyObject *o)
+    * Part of the Stable ABI since version 3.10.*
+
+   如果对象 *o* 提供了 "AsyncIterator" 协议则返回非零值，否则返回 "0"
+   。 此函数总是会成功执行。
+
+   3.10 新版功能.
+
+PyObject *PyIter_Next(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   从迭代器 *o* 返回下一个值。 对象必须可被 "PyIter_Check()" 确认为迭
+   代器（需要调用方来负责检查）。 如果没有剩余的值，则返回 "NULL" 并且
+   不设置异常。 如果在获取条目时发生了错误，则返回 "NULL" 并且传递异常
+   。
+
+要为迭代器编写一个一个循环，C代码应该看起来像这样
+
+   PyObject *iterator = PyObject_GetIter(obj);
+   PyObject *item;
+
+   if (iterator == NULL) {
+       /* propagate error */
+   }
+
+   while ((item = PyIter_Next(iterator))) {
+       /* do something with item */
+       ...
+       /* release reference when done */
+       Py_DECREF(item);
+   }
+
+   Py_DECREF(iterator);
+
+   if (PyErr_Occurred()) {
+       /* propagate error */
+   }
+   else {
+       /* continue doing useful work */
+   }
+
+type PySendResult
+
+   用于代表 "PyIter_Send()" 的不同结果的枚举值。
+
+   3.10 新版功能.
+
+PySendResult PyIter_Send(PyObject *iter, PyObject *arg, PyObject **presult)
+    * Part of the Stable ABI since version 3.10.*
+
+   将 *arg* 值发送到迭代器 *iter*。 返回:
+
+   * "PYGEN_RETURN"，如果迭代器返回的话。 返回值会通过 *presult* 来返
+     回。
+
+   * "PYGEN_NEXT"，如果迭代器生成值的话。 生成的值会通过 *presult* 来
+     返回。
+
+   * "PYGEN_ERROR"，如果迭代器引发异常的话。  *presult* 会被设为
+     "NULL"。
+
+   3.10 新版功能.

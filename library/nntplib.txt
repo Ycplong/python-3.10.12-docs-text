@@ -1,0 +1,472 @@
+"nntplib" --- NNTP 协议客户端
+*****************************
+
+**源代码:** Lib/nntplib.py
+
+3.11 版后已移除: "nntplib" 模块已被弃用（请参阅 **PEP 594** 了解详情）
+。
+
+======================================================================
+
+此模块定义了 "NNTP" 类来实现网络新闻传输协议的客户端。 它可被用于实现
+一个新闻阅读或发布器，或是新闻自动处理程序。 它兼容了 **RFC 3977** 以
+及较旧的 **RFC 977** 和 **RFC 2980**。
+
+下面是此模块的两个简单用法示例。 列出某个新闻组的一些统计数据并打印最
+近 10 篇文章的主题:
+
+   >>> s = nntplib.NNTP('news.gmane.io')
+   >>> resp, count, first, last, name = s.group('gmane.comp.python.committers')
+   >>> print('Group', name, 'has', count, 'articles, range', first, 'to', last)
+   Group gmane.comp.python.committers has 1096 articles, range 1 to 1096
+   >>> resp, overviews = s.over((last - 9, last))
+   >>> for id, over in overviews:
+   ...     print(id, nntplib.decode_header(over['subject']))
+   ...
+   1087 Re: Commit privileges for Łukasz Langa
+   1088 Re: 3.2 alpha 2 freeze
+   1089 Re: 3.2 alpha 2 freeze
+   1090 Re: Commit privileges for Łukasz Langa
+   1091 Re: Commit privileges for Łukasz Langa
+   1092 Updated ssh key
+   1093 Re: Updated ssh key
+   1094 Re: Updated ssh key
+   1095 Hello fellow committers!
+   1096 Re: Hello fellow committers!
+   >>> s.quit()
+   '205 Bye!'
+
+要基于一个二进制文件发布文章 (假定文章包含有效的标头，并且你有在特定新
+闻组上发布内容的权限):
+
+   >>> s = nntplib.NNTP('news.gmane.io')
+   >>> f = open('article.txt', 'rb')
+   >>> s.post(f)
+   '240 Article posted successfully.'
+   >>> s.quit()
+   '205 Bye!'
+
+此模块本身定义了以下的类:
+
+class nntplib.NNTP(host, port=119, user=None, password=None, readermode=None, usenetrc=False[, timeout])
+
+   返回一个新的 "NNTP" 对象，代表一个对运行于主机 *host*，在端口
+   *port* 上监听的 NNTP 服务器的连接。 可以为套接字连接指定可选的
+   *timeout*。 如果提供了可选的 *user* 和 *password*，或者如果在
+   "/.netrc" 中存在适合的凭证并且可选的旗标 *usenetrc* 为真值，则会使
+   用 "AUTHINFO USER" 和 "AUTHINFO PASS" 命令在服务器上标识和认证用户
+   。 如果可选的旗标 *readermode* 为真值，则会在执行认证之前发送 "mode
+   reader" 命令。 在某些时候如果你是连接本地机器上的 NNTP 服务器并且想
+   要调用读取者专属命令如 "group" 那么还必须使用读取者模式。 如果你收
+   到预料之外的 "NNTPPermanentError"，你可能需要设置 *readermode*。
+   "NNTP" 类支持使用 "with" 语句来无条件地消费 "OSError" 异常并在结束
+   时关闭 NNTP 连接，例如:
+
+   >>> from nntplib import NNTP
+   >>> with NNTP('news.gmane.io') as n:
+   ...     n.group('gmane.comp.python.committers')
+   ... 
+   ('211 1755 1 1755 gmane.comp.python.committers', 1755, 1, 1755, 'gmane.comp.python.committers')
+   >>>
+
+   引发一个 审计事件 "nntplib.connect"，附带参数 "self", "host",
+   "port"。
+
+   引发一个 审计事件 "nntplib.putline"，附带参数 "self", "line"。
+
+   在 3.2 版更改: *usenetrc* 现在默认为 "False"。
+
+   在 3.3 版更改: 添加了对 "with" 语句的支持。
+
+   在 3.9 版更改: 如果 *timeout* 参数设置为 0，创建非阻塞套接字时，它
+   将引发 "ValueError" 来阻止该操作。
+
+class nntplib.NNTP_SSL(host, port=563, user=None, password=None, ssl_context=None, readermode=None, usenetrc=False[, timeout])
+
+   返回一个新的 "NNTP_SSL" 对象，代表一个对运行于主机 *host*，在端口
+   *port* 上监听的 NNTP 服务器的连接。 "NNTP_SSL" 对象具有与 "NNTP" 对
+   象相同的方法。 如果 *port* 被省略，则会使用端口 563 (NNTPS)。
+   *ssl_context* 也是可选的，且为一个 "SSLContext" 对象。 请阅读 安全
+   考量 来了解最佳实践。 所有其他形参的行为都与 "NNTP" 的相同。
+
+   请注意 **RFC 4642** 不再推荐使用 563 端口的 SSL，建议改用下文描述的
+   STARTTLS。 但是，某些服务器只支持前者。
+
+   引发一个 审计事件 "nntplib.connect"，附带参数 "self", "host",
+   "port"。
+
+   引发一个 审计事件 "nntplib.putline"，附带参数 "self", "line"。
+
+   3.2 新版功能.
+
+   在 3.4 版更改: 本类现在支持使用 "ssl.SSLContext.check_hostname" 和
+   *服务器名称指示* （参阅 "ssl.HAS_SNI"）进行主机名检查。
+
+   在 3.9 版更改: 如果 *timeout* 参数设置为 0，创建非阻塞套接字时，它
+   将引发 "ValueError" 来阻止该操作。
+
+exception nntplib.NNTPError
+
+   派生自标准异常 "Exception"，这是 "nntplib" 模块中引发的所有异常的基
+   类。 该类的实例具有以下属性:
+
+   response
+
+      可用的服务器响应，为一 "str" 对象。
+
+exception nntplib.NNTPReplyError
+
+   从服务器收到意外答复时，将引发本异常。
+
+exception nntplib.NNTPTemporaryError
+
+   收到 400--499 范围内的响应代码时所引发的异常。
+
+exception nntplib.NNTPPermanentError
+
+   收到 500--599 范围内的响应代码时所引发的异常。
+
+exception nntplib.NNTPProtocolError
+
+   当从服务器收到不是以数字 1--5 开头的答复时所引发的异常。
+
+exception nntplib.NNTPDataError
+
+   当响应数据中存在错误时所引发的异常。
+
+
+NNTP 对象
+=========
+
+当连接时，"NNTP" 和 "NNTP_SSL" 对象支持以下方法和属性。
+
+
+属性
+----
+
+NNTP.nntp_version
+
+   代表服务器所支持的 NNTP 协议版本的整数。 在实践中，这对声明遵循
+   **RFC 3977** 的服务器应为 "2" 而对其他服务器则为 "1"。
+
+   3.2 新版功能.
+
+NNTP.nntp_implementation
+
+   描述 NNTP 服务器软件名称和版本的字符串，如果服务器未声明此信息则为
+   "None"。
+
+   3.2 新版功能.
+
+
+方法
+----
+
+作为几乎全部方法所返回元组的第一项返回的 *response* 是服务器的响应：以
+三位数字代码打头的字符串。 如果服务器的响应是提示错误，则方法将引发上
+述异常之一。
+
+以下方法中许多都接受一个可选的仅限关键字参数 *file*。 当提供了 *file*
+参数时，它必须为打开用于二进制写入的 *file object*，或要写入的磁盘文件
+名称。 此类方法随后将把服务器返回的任意数据（除了响应行和表示结束的点
+号）写入到文件中；此类方法通常返回的任何行列表、元组或对象都将为空值。
+
+在 3.2 版更改: 以下方法中许多都已被重写和修正，这使得它们不再与 3.1 中
+的同名方法相兼容。
+
+NNTP.quit()
+
+   发送 "QUIT" 命令并关闭连接。 一旦此方法被调用，NNTP 对象的其他方法
+   都不应再被调用。
+
+NNTP.getwelcome()
+
+   返回服务器发送的欢迎消息，作为连接开始的回复。（该消息有时包含与用
+   户有关的免责声明或帮助信息。）
+
+NNTP.getcapabilities()
+
+   返回服务器所声明的 **RFC 3977** 功能，其形式为将功能名称映射到（可
+   能为空的）值列表的 "dict" 实例。 在不能识别 "CAPABILITIES" 命令的旧
+   式服务器上，会返回一个空字典。
+
+   >>> s = NNTP('news.gmane.io')
+   >>> 'POST' in s.getcapabilities()
+   True
+
+   3.2 新版功能.
+
+NNTP.login(user=None, password=None, usenetrc=True)
+
+   发送 "AUTHINFO" 命令并附带用户名和密码。 如果 *user* 和 *password*
+   为 "None" 且 *usenetrc* 为真值，则会在可能的情况下使用来自
+   "~/.netrc" 的凭证。
+
+   除非被有意延迟，登录操作通常会在 "NNTP" 对象初始化期间被执行因而没
+   有必要单独调用此函数。 要强制延迟验证，你在创建该对象时不能设置
+   *user* 或 *password*，并必须将 *usenetrc* 设为 False。
+
+   3.2 新版功能.
+
+NNTP.starttls(context=None)
+
+   发送 "STARTTLS" 命令。 这将在 NNTP 连接上启用加密。 *context* 参数
+   是可选的且应为 "ssl.SSLContext" 对象。 请阅读 安全考量 了解最佳实践
+   。
+
+   请注意此操作可能不会在传输验证信息之后立即完成，只要有可能验证默认
+   会在 "NNTP" 对象初始化期间发生。 请参阅 "NNTP.login()" 了解有关如何
+   屏蔽此行为的信息。
+
+   3.2 新版功能.
+
+   在 3.4 版更改: 此方法现在支持使用 "ssl.SSLContext.check_hostname"
+   和 *服务器名称指示* (参见 "ssl.HAS_SNI") 进行主机名检查。
+
+NNTP.newgroups(date, *, file=None)
+
+   发送 "NEWGROUPS" 命令。 *date* 参数应为 "datetime.date" 或
+   "datetime.datetime" 对象。 返回一个 "(response, groups)" 对，其中
+   *groups* 是代表给定i *date* 以来所新建的新闻组。 但是如果提供了
+   *file*，则 *groups* 将为空值。
+
+   >>> from datetime import date, timedelta
+   >>> resp, groups = s.newgroups(date.today() - timedelta(days=3))
+   >>> len(groups) 
+   85
+   >>> groups[0] 
+   GroupInfo(group='gmane.network.tor.devel', last='4', first='1', flag='m')
+
+NNTP.newnews(group, date, *, file=None)
+
+   发送 "NEWNEWS" 命令。 这里，*group* 是新闻组名称或为 "'*'"，而
+   *date* 与 "newgroups()" 中的含义相同。 返回一个 "(response,
+   articles)" 对，其中 *articles* 为消息 ID 列表。
+
+   此命令经常会被 NNTP 服务器管理员禁用。
+
+NNTP.list(group_pattern=None, *, file=None)
+
+   发送 "LIST" 或 "LIST ACTIVE" 命令。 返回一个 "(response, list)" 对
+   ，其中 *list* 是代表此 NNTP 服务器上所有可用新闻组的元组列表，并可
+   选择匹配模式字符串 *group_pattern*。 每个元组的形式为 "(group,
+   last, first, flag)"，其中 *group* 为新闻组名称，*last* 和 *first*
+   是最后一个和第一个文章的编号，而 *flag* 通常为下列值之一:
+
+   * "y": 允许来自组员的本地发帖和文章。
+
+   * "m": 新闻组受到管制因而所有发帖必须经过审核。
+
+   * "n": 不允许本地发帖，只允许来自组员的文章。
+
+   * "j": 来自组员的文章会被转入垃圾分组。
+
+   * "x": 不允许本地发帖，而来自组员的文章会被忽略。
+
+   * "=foo.bar": 文章会被转入 "foo.bar" 分组。
+
+   如果 *flag* 具有其他值，则新闻组的状态应当被视为未知。
+
+   此命令可能返回非常庞大的结果，特别是当未指明 *group_pattern* 的时候
+   。 最好是离线缓存其结果，除非你确实需要刷新它们。
+
+   在 3.2 版更改: 增加了 *group_pattern*。
+
+NNTP.descriptions(grouppattern)
+
+   发送 "LIST NEWSGROUPS" 命令，其中 *grouppattern* 为 **RFC 3977** 中
+   规定的 wildmat 字符串（它实际上与 DOS 或 UNIX shell 通配字符串相同
+   ）。 返回一个 "(response, descriptions)" 对，其中 *descriptions* 是
+   将新闻组名称映射到文本描述的字典。
+
+   >>> resp, descs = s.descriptions('gmane.comp.python.*')
+   >>> len(descs) 
+   295
+   >>> descs.popitem() 
+   ('gmane.comp.python.bio.general', 'BioPython discussion list (Moderated)')
+
+NNTP.description(group)
+
+   获取单个新闻组 *group* 的描述。 如果匹配到一个以上的新闻组（如果
+   'group' 是一个真实的 wildmat 字符串），则返回第一个匹配结果。 如果
+   未匹配到任何新闻组，则返回空字符串。
+
+   此方法略去了来自服务器的响应代码。 如果需要响应代码，请使用
+   "descriptions()"。
+
+NNTP.group(name)
+
+   发送 "GROUP" 命令，其中 *name* 为新闻组名称。 该新闻组如果存在，则
+   会被选定为当前新闻组。 返回一个元组 "(response, count, first, last,
+   name)"，其中 *count* 是该新闻组中（估计的）文章数量，*first* 是新闻
+   组中第一篇文章的编号，*last* 是新闻组中最后一篇文章的编号，而
+   *name* 是新闻组名称。
+
+NNTP.over(message_spec, *, file=None)
+
+   发送 "OVER" 命令，或是旧式服务器上的 "XOVER" 命令。 *message_spec*
+   可以是表示消息 ID 的字符串，或是指明当前新闻组内文章范围的数字元组
+   "(first, last)"，或是指明当前新闻组内从 "(first, None)" *first* 到
+   最后一篇文章的元组，或者为 "None" 表示选定当前新闻组内的当前文章。
+
+   返回一个 "(response, overviews)" 对。 其中 *overviews* 是一个包含
+   "(article_number, overview)" 元组的列表，每个元组对应
+   *message_spec* 所选定的一篇文章。 每个 *overview* 则是包含同样数量
+   条目的字典，但具体数量取决于服务器。 这些条目或是为消息标头（对应键
+   为小写的标头名称）或是为 metadata 项（对应键为以 "":"" 打头的
+   metadata 名称）。 以下条目会由 NNTP 规范描述来确保提供:
+
+   * "subject", "from", "date", "message-id" 和 "references" 标头
+
+   * ":bytes" metadata: 整个原始文章数据的字节数（包括标头和消息体）
+
+   * ":lines" metadata: 文章消息体的行数
+
+   每个条目的值或者为字符串，或者在没有值时为 "None"。
+
+   建议在标头值可能包含非 ASCII 字符的时候对其使用 "decode_header()"
+   函数:
+
+      >>> _, _, first, last, _ = s.group('gmane.comp.python.devel')
+      >>> resp, overviews = s.over((last, last))
+      >>> art_num, over = overviews[0]
+      >>> art_num
+      117216
+      >>> list(over.keys())
+      ['xref', 'from', ':lines', ':bytes', 'references', 'date', 'message-id', 'subject']
+      >>> over['from']
+      '=?UTF-8?B?Ik1hcnRpbiB2LiBMw7Z3aXMi?= <martin@v.loewis.de>'
+      >>> nntplib.decode_header(over['from'])
+      '"Martin v. Löwis" <martin@v.loewis.de>'
+
+   3.2 新版功能.
+
+NNTP.help(*, file=None)
+
+   发送 "HELP" 命令。 返回一个 "(response, list)" 对，其中 *list* 为帮
+   助字符串列表。
+
+NNTP.stat(message_spec=None)
+
+   发送 "STAT" 命令，其中 *message_spec* 为消息 ID (包裹在 "'<'" 和
+   "'>'" 中) 或者当前新闻组中的文章编号。 如果 *message_spec* 被省略或
+   为 "None"，则会选择当前新闻组中的当前文章。 反回一个三元组
+   "(response, number, id)"，其中 *number* 为文章编号而 *id* 为消息 ID
+   。
+
+   >>> _, _, first, last, _ = s.group('gmane.comp.python.devel')
+   >>> resp, number, message_id = s.stat(first)
+   >>> number, message_id
+   (9099, '<20030112190404.GE29873@epoch.metaslash.com>')
+
+NNTP.next()
+
+   发送 "NEXT" 命令。 返回与 "stat()" 类似的结果。
+
+NNTP.last()
+
+   发送 "LAST" 命令。 返回与 "stat()" 类似的结果。
+
+NNTP.article(message_spec=None, *, file=None)
+
+   发送 "ARTICLE" 命令，其中 *message_spec* 的含义与 "stat()" 中的相同
+   。 返回一个元组 "(response, info)"，其中 *info* 是一个 "namedtuple"
+   ，包含三个属性 *number*, *message_id* 和 *lines* (按此顺序)。
+   *number* 是新闻组中的文章数量 (或者如果该信息不可用则为 0)，
+   *message_id* 为字符串形式的消息 ID，而 *lines* 为由包括标头和消息体
+   的原始消息的行组成的列表 (不带末尾换行符)。
+
+   >>> resp, info = s.article('<20030112190404.GE29873@epoch.metaslash.com>')
+   >>> info.number
+   0
+   >>> info.message_id
+   '<20030112190404.GE29873@epoch.metaslash.com>'
+   >>> len(info.lines)
+   65
+   >>> info.lines[0]
+   b'Path: main.gmane.org!not-for-mail'
+   >>> info.lines[1]
+   b'From: Neal Norwitz <neal@metaslash.com>'
+   >>> info.lines[-3:]
+   [b'There is a patch for 2.3 as well as 2.2.', b'', b'Neal']
+
+NNTP.head(message_spec=None, *, file=None)
+
+   与 "article()" 类似，但会发送 "HEAD" 命令。 返回的 *lines* (或写入
+   到 *file*) 将只包含消息标头，不包含消息体。
+
+NNTP.body(message_spec=None, *, file=None)
+
+   与 "article()" 类似，但会发送 "BODY" 命令。 返回的 *lines* (或写入
+   到 *file*) 将只包含消息体，不包含标头。
+
+NNTP.post(data)
+
+   使用 "POST" 命令发布文章。 *data* 参数是以二进制读取模式打开的
+   *file object*，或是任意包含字节串对象的可迭代对象 (表示要发布的文章
+   的原始行数据)。 它应当代表一篇适当格式的新闻组文章，包含所需的标头
+   。 "post()" 方法会自动对以 "." 打头的行数据进行转义并添加结束行。
+
+   如果此方法执行成功，将返回服务器的响应。 如果服务器拒绝响应，则会引
+   发 "NNTPReplyError"。
+
+NNTP.ihave(message_id, data)
+
+   发送 "IHAVE" 命令。 *message_id* 为要发给服务器的消息 ID (包裹在
+   "'<'" 和 "'>'" 中)。 *data* 形参和返回值与 "post()" 的一致。
+
+NNTP.date()
+
+   返回一个 "(response, date)" 对。 *date* 是包含服务器当前日期与时间
+   的 "datetime" 对象。
+
+NNTP.slave()
+
+   发送 "SLAVE" 命令。 返回服务器的 *响应*。
+
+NNTP.set_debuglevel(level)
+
+   设置实例的调试级别。 它控制着打印调试输出信息的数量。 默认值 "0" 不
+   产生调试输出。 值 "1" 产生中等数量的调试输出，通常每个请求或响应各
+   产生一行。 大于等于 "2" 的值产生最多的调试输出，在连接上发送和接收
+   的每一行信息都会被记录下来（包括消息文本）。
+
+以下是在 **RFC 2980** 中定义的可选 NNTP 扩展。 其中一些已被 **RFC
+3977** 中的新命令所取代。
+
+NNTP.xhdr(hdr, str, *, file=None)
+
+   发送 "XHDR" 命令。 *hdr* 参数是标头关键字，例如 "'subject'"。 *str*
+   参数的形式应为 "'first-last'"，其中 *first* 和 *last* 是要搜索的首
+   篇和末篇文章编号。 返回一个 "(response, list)" 对，其中 *list* 是
+   "(id, text)" 对的列表，其中 *id* 是文章编号（字符串类型）而 *text*
+   是该文章的请求标头。 如果提供了 *file* 形参，则 "XHDR" 命令的输出会
+   保存到文件中。 如果 *file* 为字符串，则此方法将打开指定名称的文件，
+   向其写入内容并将其关闭。 如果 *file* 为 *file object*，则将在该文件
+   对象上调用 "write()" 方法来保存命令所输出的行信息。 如果提供了
+   *file*，则返回的 *list* 将为空列表。
+
+NNTP.xover(start, end, *, file=None)
+
+   发送 "XOVER" 命令。 *start* 和 *end* 是限制所选取文章范围的文章编号
+   。 返回值与 "over()" 的相同。 推荐改用 "over()"，因为它将在可能的情
+   况下自动使用更新的 "OVER" 命令。
+
+
+工具函数
+========
+
+这个模块还定义了下列工具函数:
+
+nntplib.decode_header(header_str)
+
+   解码标头值，恢复任何被转义的非 ASCII 字符。 *header_str* 必须为
+   "str" 对象。 将返回被恢复的值。 推荐使用此函数来以人类可读的形式显
+   示某些标头:
+
+      >>> decode_header("Some subject")
+      'Some subject'
+      >>> decode_header("=?ISO-8859-15?Q?D=E9buter_en_Python?=")
+      'Débuter en Python'
+      >>> decode_header("Re: =?UTF-8?B?cHJvYmzDqG1lIGRlIG1hdHJpY2U=?=")
+      'Re: problème de matrice'

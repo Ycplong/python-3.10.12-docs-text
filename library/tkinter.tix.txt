@@ -1,0 +1,369 @@
+"tkinter.tix" --- TK扩展包
+**************************
+
+**源代码:** Lib/tkinter/tix.py
+
+3.6 版后已移除: 这个 TK 扩展已无人维护所以请不要在新代码中使用。 请改
+用 "tkinter.ttk"。
+
+======================================================================
+
+"tkinter.tix" (Tk Interface Extension) 模块提供了更丰富的额外可视化部
+件集。 虽然标准 Tk 库包含许多有用的部件，但还远不够完备。
+"tkinter.tix" 库提供了标准 Tk 所缺少的大量常用部件: "HList",
+"ComboBox", "Control" (即 SpinBox) 以及一系列可滚动的部件。
+"tkinter.tix" 还包括了大量在多种不同领域的应用中很常用的部件:
+"NoteBook", "FileEntry", "PanedWindow" 等等；总共有超过 40 种。
+
+使用这些新增部件，你可以为应用程序引入新的交互技术，创建更好用且更直观
+的用户界面。 你在设计应用程序时可以通过选择最适合的部件来匹配你的应用
+程序和用户的特殊需求。
+
+参见:
+
+  Tix Homepage
+     "Tix" 的主页。 其中包括附加文档和下载资源的链接。
+
+  Tix Man Pages
+     在线版本的指南页面和参考材料。
+
+  Tix Programming Guide
+     在线版本的程序员参考材料。
+
+  Tix Development Applications
+     开发 Tix 和 Tkinter 程序的 Tix 应用。 Tide 应用在 Tk 在 Tkinter
+     下工作，并包括了 **TixInspect**，这是一个可远程修改和调试
+     Tix/Tk/Tkinter 应用的检查工具。
+
+
+使用 Tix
+========
+
+class tkinter.tix.Tk(screenName=None, baseName=None, className='Tix')
+
+   最常用于代表应用主窗口的最高层级部件。 它具有一个相关联的 Tcl 解释
+   器。interpreter.
+
+   "tkinter.tix" 模块中的类子类化了 "tkinter" 中的类。 前者会导入后者
+   ，因此 "tkinter.tix" 要使用 Tkinter，你所要做的就是导入一个模块。
+   通常，你可以只导入 "tkinter.tix"，并将最高层级调用由 "tkinter.Tk"
+   替换为 "tix.Tk":
+
+      from tkinter import tix
+      from tkinter.constants import *
+      root = tix.Tk()
+
+要使用 "tkinter.tix"，你必须安装有 Tix 部件，通常会与你的 Tk 部分一起
+安装。 要测试你的安装，请尝试以下代码:
+
+   from tkinter import tix
+   root = tix.Tk()
+   root.tk.eval('package require Tix')
+
+
+Tix 部件
+========
+
+Tix introduces over 40 widget classes to the "tkinter" repertoire.
+
+
+基本部件
+--------
+
+class tkinter.tix.Balloon
+
+   A Balloon that pops up over a widget to provide help.  When the
+   user moves the cursor inside a widget to which a Balloon widget has
+   been bound, a small pop-up window with a descriptive message will
+   be shown on the screen.
+
+class tkinter.tix.ButtonBox
+
+   The ButtonBox widget creates a box of buttons, such as is commonly
+   used for "Ok Cancel".
+
+class tkinter.tix.ComboBox
+
+   The ComboBox widget is similar to the combo box control in MS
+   Windows. The user can select a choice by either typing in the entry
+   subwidget or selecting from the listbox subwidget.
+
+class tkinter.tix.Control
+
+   The Control widget is also known as the "SpinBox" widget. The user
+   can adjust the value by pressing the two arrow buttons or by
+   entering the value directly into the entry. The new value will be
+   checked against the user-defined upper and lower limits.
+
+class tkinter.tix.LabelEntry
+
+   The LabelEntry widget packages an entry widget and a label into one
+   mega widget. It can be used to simplify the creation of "entry-
+   form" type of interface.
+
+class tkinter.tix.LabelFrame
+
+   The LabelFrame widget packages a frame widget and a label into one
+   mega widget.  To create widgets inside a LabelFrame widget, one
+   creates the new widgets relative to the "frame" subwidget and
+   manage them inside the "frame" subwidget.
+
+class tkinter.tix.Meter
+
+   The Meter widget can be used to show the progress of a background
+   job which may take a long time to execute.
+
+class tkinter.tix.OptionMenu
+
+   The OptionMenu creates a menu button of options.
+
+class tkinter.tix.PopupMenu
+
+   The PopupMenu widget can be used as a replacement of the "tk_popup"
+   command. The advantage of the "Tix" "PopupMenu" widget is it
+   requires less application code to manipulate.
+
+class tkinter.tix.Select
+
+   The Select widget is a container of button subwidgets. It can be
+   used to provide radio-box or check-box style of selection options
+   for the user.
+
+class tkinter.tix.StdButtonBox
+
+   The StdButtonBox widget is a group of standard buttons for Motif-
+   like dialog boxes.
+
+
+文件选择器
+----------
+
+class tkinter.tix.DirList
+
+   The DirList widget displays a list view of a directory, its
+   previous directories and its sub-directories. The user can choose
+   one of the directories displayed in the list or change to another
+   directory.
+
+class tkinter.tix.DirTree
+
+   The DirTree widget displays a tree view of a directory, its
+   previous directories and its sub-directories. The user can choose
+   one of the directories displayed in the list or change to another
+   directory.
+
+class tkinter.tix.DirSelectDialog
+
+   The DirSelectDialog widget presents the directories in the file
+   system in a dialog window.  The user can use this dialog window to
+   navigate through the file system to select the desired directory.
+
+class tkinter.tix.DirSelectBox
+
+   "DirSelectBox" 类似于标准的 Motif(TM) 目录选择框。 它通常用于让用户
+   选择一个目录。 DirSelectBox 会将最近选择的目录存放在一个 ComboBox
+   部件中以便可以再次快速地选择它们。
+
+class tkinter.tix.ExFileSelectBox
+
+   The ExFileSelectBox widget is usually embedded in a
+   tixExFileSelectDialog widget. It provides a convenient method for
+   the user to select files. The style of the "ExFileSelectBox" widget
+   is very similar to the standard file dialog on MS Windows 3.1.
+
+class tkinter.tix.FileSelectBox
+
+   The FileSelectBox is similar to the standard Motif(TM) file-
+   selection box. It is generally used for the user to choose a file.
+   FileSelectBox stores the files mostly recently selected into a
+   "ComboBox" widget so that they can be quickly selected again.
+
+class tkinter.tix.FileEntry
+
+   The FileEntry widget can be used to input a filename. The user can
+   type in the filename manually. Alternatively, the user can press
+   the button widget that sits next to the entry, which will bring up
+   a file selection dialog.
+
+
+层级式列表框
+------------
+
+class tkinter.tix.HList
+
+   The HList widget can be used to display any data that have a
+   hierarchical structure, for example, file system directory trees.
+   The list entries are indented and connected by branch lines
+   according to their places in the hierarchy.
+
+class tkinter.tix.CheckList
+
+   The CheckList widget displays a list of items to be selected by the
+   user. CheckList acts similarly to the Tk checkbutton or radiobutton
+   widgets, except it is capable of handling many more items than
+   checkbuttons or radiobuttons.
+
+class tkinter.tix.Tree
+
+   The Tree widget can be used to display hierarchical data in a tree
+   form. The user can adjust the view of the tree by opening or
+   closing parts of the tree.
+
+
+表格式列表框
+------------
+
+class tkinter.tix.TList
+
+   The TList widget can be used to display data in a tabular format.
+   The list entries of a "TList" widget are similar to the entries in
+   the Tk listbox widget.  The main differences are (1) the "TList"
+   widget can display the list entries in a two dimensional format and
+   (2) you can use graphical images as well as multiple colors and
+   fonts for the list entries.
+
+
+管理器部件
+----------
+
+class tkinter.tix.PanedWindow
+
+   The PanedWindow widget allows the user to interactively manipulate
+   the sizes of several panes. The panes can be arranged either
+   vertically or horizontally.  The user changes the sizes of the
+   panes by dragging the resize handle between two panes.
+
+class tkinter.tix.ListNoteBook
+
+   The ListNoteBook widget is very similar to the "TixNoteBook"
+   widget: it can be used to display many windows in a limited space
+   using a notebook metaphor. The notebook is divided into a stack of
+   pages (windows). At one time only one of these pages can be shown.
+   The user can navigate through these pages by choosing the name of
+   the desired page in the "hlist" subwidget.
+
+class tkinter.tix.NoteBook
+
+   The NoteBook widget can be used to display many windows in a
+   limited space using a notebook metaphor. The notebook is divided
+   into a stack of pages. At one time only one of these pages can be
+   shown. The user can navigate through these pages by choosing the
+   visual "tabs" at the top of the NoteBook widget.
+
+
+图像类型
+--------
+
+"tkinter.tix" 模块增加了:
+
+* pixmap capabilities to all "tkinter.tix" and "tkinter" widgets to
+  create color images from XPM files.
+
+* Compound image types can be used to create images that consists of
+  multiple horizontal lines; each line is composed of a series of
+  items (texts, bitmaps, images or spaces) arranged from left to
+  right. For example, a compound image can be used to display a bitmap
+  and a text string simultaneously in a Tk "Button" widget.
+
+
+其他部件
+--------
+
+class tkinter.tix.InputOnly
+
+   The InputOnly widgets are to accept inputs from the user, which can
+   be done with the "bind" command (Unix only).
+
+
+表单布局管理器
+--------------
+
+"tkinter.tix" 还额外提供了以下部件来增强 "tkinter" 的功能:
+
+class tkinter.tix.Form
+
+   The Form geometry manager based on attachment rules for all Tk
+   widgets.
+
+
+Tix 命令
+========
+
+class tkinter.tix.tixCommand
+
+   The tix commands provide access to miscellaneous elements of
+   "Tix"'s internal state and the "Tix" application context.  Most of
+   the information manipulated by these methods pertains to the
+   application as a whole, or to a screen or display, rather than to a
+   particular window.
+
+   要查看当前的设置，通常的用法是:
+
+      from tkinter import tix
+      root = tix.Tk()
+      print(root.tix_configure())
+
+tixCommand.tix_configure(cnf=None, **kw)
+
+   查询或修改 Tix 应用程序上下文的配置选项。 如果未指定任何选项，则返
+   回包含所有选项的字典。 如果指定了不带值的选项，则该方法返回描述指定
+   选项的列表（如果未指定选项则此列表与所返回值对应的子列表相同）。 如
+   果指定了一个或多个选项-值对，则该方法会将指定的选项修改为指定的值；
+   在此情况下该方法将返回一个空字符串。 选项可以是配置选项中的任何一个
+   。
+
+tixCommand.tix_cget(option)
+
+   返回由 *option* 给出的配置选项的当前值。 选项可以是配置选项中的任何
+   一个。
+
+tixCommand.tix_getbitmap(name)
+
+   在某个位图目录中定位名称为 "name.xpm" 或 "name" 的位图文件（位图目
+   录参见 "tix_addbitmapdir()" 方法）。 通过使用 "tix_getbitmap()"，你
+   可以避免在你的应用程序中硬编码位图文件的路径名。 执行成功时，它返回
+   位图文件的完整路径名，并带有前缀字符 "@"。 返回值可被用于配置 Tk 和
+   Tix 部件的 "bitmap" 选项。
+
+tixCommand.tix_addbitmapdir(directory)
+
+   Tix 维护了一个列表以供 "tix_getimage()" 和 "tix_getbitmap()" 方法在
+   其中搜索图像文件。 标准位图目录是 "$TIX_LIBRARY/bitmaps"。
+   "tix_addbitmapdir()" 方法向该列表添加了 *directory*。 通过使用此方
+   法，应用程序的图像文件也可使用 "tix_getimage()" 或
+   "tix_getbitmap()" 方法来定位。
+
+tixCommand.tix_filedialog([dlgclass])
+
+   返回可在来自该应用程序的同不调用之间共享的选择对话框。 此方法将在首
+   次被调用时创建一个选择对话框部件。 此后对 "tix_filedialog()" 的所有
+   调用都将返回该对话框。 可以传入一个字符串形式的可选形参 dlgclass 来
+   指明所需的选择对话框类型。 可用的选项有 "tix", "FileSelectDialog"
+   或 "tixExFileSelectDialog"。
+
+tixCommand.tix_getimage(self, name)
+
+   在某个位图目录（参见上文的 "tix_addbitmapdir()" 方法）中定位名为
+   "name.xpm", "name.xbm" 或 "name.ppm" 的图像文件。 如果存在多个同名
+   文件（但扩展名不同），则会按照 X 显示的深度选择图像类型：单色显示选
+   择 xbm 图像而彩色显示则选择彩色图像。 通过使用 "tix_getimage()"，你
+   可以避免在你的应用程序中硬编码图像文件的路径名。 当执行成功时，此方
+   法将返回新创建图像的名称，它可被用于配置 Tk 和 Tix 部件的 "image"
+   选项。
+
+tixCommand.tix_option_get(name)
+
+   获取由 Tix 方案机制维护的选项。
+
+tixCommand.tix_resetoptions(newScheme, newFontSet[, newScmPrio])
+
+   将 Tix 应用程序的方案与字体集分别重置为 *newScheme* 和 *newFontSet*
+   。 这只会影响调用此方法之后创建的部件。 因此，最好是在 Tix 应用程序
+   的任何部件被创建之前调用 resetoptions 方法。
+
+   可以给出可选的形参 *newScmPrio* 来重置由 Tix 方案所设置的 Tk 选项的
+   优先级。
+
+   由于 Tk 处理 X 选项数据库的特别方式，在 Tix 被导入并初始化之后，将
+   无法再使用 "tix_config()" 方法来重置颜色方案和字体集。 而必须要使用
+   "tix_resetoptions()" 方法。

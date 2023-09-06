@@ -1,0 +1,1593 @@
+"importlib" --- "import" 的实现
+*******************************
+
+3.1 新版功能.
+
+**源代码** Lib/importlib/__init__.py
+
+======================================================================
+
+
+概述
+====
+
+"importlib" 包的目的有两个。 第一个目的是在 Python 源代码中提供
+"import" 语句的实现（并且因此而扩展 "__import__()" 函数）。 这提供了一
+个可移植到任何 Python 解释器的 "import" 实现。 相比使用 Python 以外的
+编程语言实现方式，这一实现更加易于理解。
+
+第二个目的是实现 "import" 的部分被公开在这个包中，使得用户更容易创建他
+们自己的自定义对象 (通常被称为 *importer*) 来参与到导入过程中。
+
+参见:
+
+  import 语句
+     "import" 语句的语言参考
+
+  包规格说明
+     包的初始规范。自从编写这个文档开始，一些语义已经发生改变了（比如
+     基于 "sys.modules" 中 "None" 的重定向）。
+
+  "__import__()" 函数
+     "import" 语句是这个函数的语法糖。
+
+  **PEP 235**
+     在忽略大小写的平台上进行导入
+
+  **PEP 263**
+     定义 Python 源代码编码
+
+  **PEP 302**
+     新导入钩子
+
+  **PEP 328**
+     导入：多行和绝对/相对
+
+  **PEP 366**
+     主模块显式相对导入
+
+  **PEP 420**
+     隐式命名空间包
+
+  **PEP 451**
+     导入系统的一个模块规范类型
+
+  **PEP 488**
+     消除PYO文件
+
+  **PEP 489**
+     多阶段扩展模块初始化
+
+  **PEP 552**
+     确定性的 pyc 文件
+
+  **PEP 3120**
+     使用 UTF-8 作为默认的源编码
+
+  **PEP 3147**
+     PYC 仓库目录
+
+
+函数
+====
+
+importlib.__import__(name, globals=None, locals=None, fromlist=(), level=0)
+
+   内置 "__import__()" 函数的实现。
+
+   注解:
+
+     程序式地导入模块应该使用 "import_module()" 而不是这个函数。
+
+importlib.import_module(name, package=None)
+
+   导入一个模块。 参数 *name* 指定了以绝对或相对导入方式导入什么模块 (
+   比如要么像这样 "pkg.mod" 或者这样 "..mod")。 如果参数 name 使用相对
+   导入的方式来指定，那么 *package* 参数必须设置为那个包名，这个包名作
+   为解析这个包名的锚点 (比如  "import_module('..mod', 'pkg.subpkg')"
+   将会导入 "pkg.mod")。
+
+   "import_module()" 函数是一个对 "importlib.__import__()" 进行简化的
+   包装器。 这意味着该函数的所有语义都来自于 "importlib.__import__()"
+   。 这两个函数之间最重要的不同点在于 "import_module()" 返回指定的包
+   或模块 (例如 "pkg.mod")，而 "__import__()" 返回最高层级的包或模块 (
+   例如 "pkg")。
+
+   如果动态导入一个自解释器开始执行以来被创建的模块（即创建了一个
+   Python 源代码文件），为了让导入系统知道这个新模块，可能需要调用
+   "invalidate_caches()"。
+
+   在 3.3 版更改: 父包会被自动导入。
+
+importlib.find_loader(name, path=None)
+
+   查找一个模块的加载器，可选择地在指定的 *path* 里面。如果这个模块是
+   在 "sys.modules"，那么返回 "sys.modules[name].__loader__" (除非这个
+   加载器是 "None" 或者是没有被设置， 在这样的情况下，会引起
+   "ValueError" 异常）。 否则使用 "sys.meta_path" 的一次搜索就结束。如
+   果未发现加载器，则返回 "None"。
+
+   点状的名称没有使得它父包或模块隐式地导入，因为它需要加载它们并且可
+   能不需要。为了适当地导入一个子模块，需要导入子模块的所有父包并且使
+   用正确的参数提供给 *path*。
+
+   3.3 新版功能.
+
+   在 3.4 版更改: 如果没有设置 "__loader__"，会引起 "ValueError" 异常
+   ，就像属性设置为 "None" 的时候一样。
+
+   3.4 版后已移除: 使用 "importlib.util.find_spec()" 来代替。
+
+importlib.invalidate_caches()
+
+   使查找器存储在 "sys.meta_path" 中的内部缓存无效。如果一个查找器实现
+   了 "invalidate_caches()"，那么它会被调用来执行那个无效过程。 如果创
+   建/安装任何模块，同时正在运行的程序是为了保证所有的查找器知道新模块
+   的存在，那么应该调用这个函数。
+
+   3.3 新版功能.
+
+importlib.reload(module)
+
+   重新加载之前导入的 *module*。 那个参数必须是一个模块对象，所以它之
+   前必须已经成功导入了。 这在你已经使用外部编辑器编辑过了那个模块的源
+   代码文件并且想在退出 Python 解释器之前试验这个新版本的模块的时候将
+   很适用。 函数的返回值是那个模块对象（如果重新导入导致一个不同的对象
+   放置在 "sys.modules" 中，那么那个模块对象是有可能会不同）。
+
+   当执行 "reload()" 的时候：
+
+   * Python 模块的代码会被重新编译并且那个模块级的代码被重新执行，通过
+     重新使用一开始加载那个模块的 *loader*，定义一个新的绑定在那个模块
+     字典中的名称的对象集合。扩展模块的``init``函数不会被调用第二次。
+
+   * 与Python中的所有的其它对象一样，旧的对象只有在它们的引用计数为0之
+     后才会被回收。
+
+   * 模块命名空间中的名称重新指向任何新的或更改后的对象。
+
+   * 其他旧对象的引用（例如那个模块的外部名称）不会被重新绑定到引用的
+     新对象的，并且如果有需要，必须在出现的每个命名空间中进行更新。
+
+   有一些其他注意事项：
+
+   当一个模块被重新加载的时候，它的字典（包含了那个模块的全区变量）会
+   被保留。名称的重新定义会覆盖旧的定义，所以通常来说这不是问题。如果
+   一个新模块没有定义在旧版本模块中定义的名称，则将保留旧版本中的定义
+   。这一特性可用于作为那个模块的优点，如果它维护一个全局表或者对象的
+   缓存 —— 使用 "try" 语句，就可以测试表的存在并且跳过它的初始化，如果
+   有需要的话:
+
+      try:
+          cache
+      except NameError:
+          cache = {}
+
+   重新加载内置的或者动态加载模块，通常来说不是很有用处。不推荐重新加
+   载""sys"，"__main__"，"builtins" 和其它关键模块。在很多例子中，扩展
+   模块并不是设计为不止一次的初始化，并且当重新加载时，可能会以任意方
+   式失败。
+
+   如果一个模块使用 "from" ... "import" ... 导入的对象来自另外一个模块
+   ，给其它模块调用 "reload()" 不会重新定义来自这个模块的对象 —— 解决
+   这个问题的一种方式是重新执行 "from" 语句，另一种方式是使用 "import"
+   和限定名称(*module.name*)来代替。
+
+   如果一个模块创建一个类的实例，重新加载定义那个类的模块不影响那些实
+   例的方法定义———它们继续使用旧类中的定义。对于子类来说同样是正确的。
+
+   3.4 新版功能.
+
+   在 3.7 版更改: 如果重新加载的模块缺少  "ModuleSpec" ，则会触发
+   "ModuleNotFoundError" 。
+
+
+"importlib.abc" —— 关于导入的抽象基类
+=====================================
+
+**源代码：** Lib/importlib/abc.py
+
+======================================================================
+
+The "importlib.abc" module contains all of the core abstract base
+classes used by "import". Some subclasses of the core abstract base
+classes are also provided to help in implementing the core ABCs.
+
+ABC 类的层次结构：
+
+   object
+    +-- Finder (deprecated)
+    +-- MetaPathFinder
+    +-- PathEntryFinder
+    +-- Loader
+         +-- ResourceLoader --------+
+         +-- InspectLoader          |
+              +-- ExecutionLoader --+
+                                    +-- FileLoader
+                                    +-- SourceLoader
+
+class importlib.abc.Finder
+
+   代表 *finder* 的一个抽象基类
+
+   3.3 版后已移除: 使用 "MetaPathFinder" 或 "PathEntryFinder" 来代替。
+
+   abstractmethod find_module(fullname, path=None)
+
+      为指定的模块查找 *loader* 定义的抽象方法。本来是在 **PEP 302**
+      指定的，这个方法是在 "sys.meta_path" 和基于路径的导入子系统中使
+      用。
+
+      在 3.4 版更改: 当被调用的时候，返回 "None" 而不是引发
+      "NotImplementedError"。
+
+      3.10 版后已移除: 改为实现 "MetaPathFinder.find_spec()" 或
+      "PathEntryFinder.find_spec()" 。
+
+class importlib.abc.MetaPathFinder
+
+   一个代表 *meta path finder* 的抽象基类。
+
+   3.3 新版功能.
+
+   在 3.10 版更改: 不再是 "Finder" 的子类。
+
+   find_spec(fullname, path, target=None)
+
+      一个抽象方法，用于查找指定模块的 *spec* 。若是顶层导入，*path*
+      将为 "None"。 否则就是查找子包或模块，*path* 将是父级包的
+      "__path__" 值。找不到则会返回 "None"。传入的 "target" 是一个模块
+      对象，查找器可以用来对返回的规格进行更有依据的猜测。在实现具体的
+      "MetaPathFinders" 代码时，可能会用到
+      "importlib.util.spec_from_loader()" 。
+
+      3.4 新版功能.
+
+   find_module(fullname, path)
+
+      一个用于查找指定的模块中 *loader* 的遗留方法。如果这是最高层级的
+      导入，*path* 的值将会是 "None"。否则，这是一个查找子包或者模块的
+      方法，并且 *path* 的值将会是来自父包的 "__path__" 的值。如果未发
+      现加载器，返回 "None"。
+
+      如果定义了 "find_spec()" 方法，则提供了向后兼容的功能。
+
+      在 3.4 版更改: 当调用这个方法的时候返回 "None" 而不是引发
+      "NotImplementedError"。 可以使用 "find_spec()" 来提供功能。
+
+      3.4 版后已移除: 使用 "find_spec()" 来代替。
+
+   invalidate_caches()
+
+      当被调用的时候，一个可选的方法应该将查找器使用的任何内部缓存进行
+      无效。将在 "sys.meta_path" 上的所有查找器的缓存进行无效的时候，
+      这个函数被 "importlib.invalidate_caches()" 所使用。
+
+      在 3.4 版更改: 当方法被调用的时候，方法返回是 "None" 而不是
+      "NotImplemented" 。
+
+class importlib.abc.PathEntryFinder
+
+   一个抽象基类，代表  *path entry finder*。虽然与 "MetaPathFinder" 有
+   些相似之处，但 *PathEntryFinder* 仅用于
+   "importlib.machinery.PathFinder" 提供的基于路径的导入子系统中。
+
+   3.3 新版功能.
+
+   在 3.10 版更改: 不再是 "Finder" 的子类。
+
+   find_spec(fullname, target=None)
+
+      一个抽象方法，用于查找指定模块的 *spec*。搜索器将只在指定的
+      *path entry* 内搜索该模块。找不到则会返回 "None"。在实现具体的
+      "PathEntryFinders" 代码时，可能会用到
+      "importlib.util.spec_from_loader()" 。
+
+      3.4 新版功能.
+
+   find_loader(fullname)
+
+      一个用于在模块中查找一个 *loader* 的遗留方法。 返回一个
+      "(loader, portion)" 的2元组，"portion" 是一个贡献给命名空间包部
+      分的文件系统位置的序列。 加载器可能是 "None"，同时正在指定的
+      "portion" 表示的是贡献给命名空间包的文件系统位置。"portion" 可以
+      使用一个空列表来表示加载器不是命名空间包的一部分。 如果 "loader"
+      是 "None" 并且 "portion" 是一个空列表，那么命名空间包中无加载器
+      或者文件系统位置可查找到（即在那个模块中未能找到任何东西）。
+
+      如果定义了 "find_spec()" ，则提供了向后兼容的功能。
+
+      在 3.4 版更改: 返回 "(None, [])" 而不是引发
+      "NotImplementedError"。 当可于提供相应的功能的时候，使用
+      "find_spec()"。
+
+      3.4 版后已移除: 使用 "find_spec()" 来代替。
+
+   find_module(fullname)
+
+      "Finder.find_module`的具体实现，该方法等价于
+      ``self.find_loader(fullname)[0]`()"。
+
+      3.4 版后已移除: 使用 "find_spec()" 来代替。
+
+   invalidate_caches()
+
+      可选方法，调用后应让查找器用到的所有内部缓存失效。要让所有缓存的
+      查找器的缓存无效时，可供
+      "importlib.machinery.PathFinder.invalidate_caches()" 调用。
+
+class importlib.abc.Loader
+
+   *loader* 的抽象基类。 关于一个加载器的实际定义请查看 **PEP 302**。
+
+   加载器想要支持资源读取应该实现一个由 "importlib.abc.ResourceReader"
+   指定的``get_resource_reader(fullname)`` 方法。
+
+   在 3.7 版更改: 引入了可选的 "get_resource_reader()" 方法。
+
+   create_module(spec)
+
+      当导入一个模块的时候，一个返回将要使用的那个模块对象的方法。这个
+      方法可能返回 "None" ，这暗示着应该发生默认的模块创建语义。"
+
+      3.4 新版功能.
+
+      在 3.5 版更改: 从 Python 3.6 开始，当定义了 "exec_module()" 的时
+      候，这个方法将不会是可选的。
+
+   exec_module(module)
+
+      当一个模块被导入或重新加载时，一个抽象方法在它自己的命名空间中执
+      行那个模块。当调用 "exec_module()" 的时候，那个模块应该已经被初
+      始化 了。当这个方法存在时，必须定义 "create_module()" 。
+
+      3.4 新版功能.
+
+      在 3.6 版更改: "create_module()" 也必须被定义。
+
+   load_module(fullname)
+
+      用于加载一个模块的传统方法。如果这个模块不能被导入，将引起
+      "ImportError" 异常，否则返回那个被加载的模块。
+
+      如果请求的模块已经存在 "sys.modules"，应该使用并且重新加载那个模
+      块。 否则加载器应该是创建一个新的模块并且在任何家过程开始之前将
+      这个新模块插入到 "sys.modules" 中，来阻止递归导入。 如果加载器插
+      入了一个模块并且加载失败了，加载器必须从 "sys.modules" 中将这个
+      模块移除。在加载器开始执行之前，已经在 "sys.modules" 中的模块应
+      该被忽略 (查看 "importlib.util.module_for_loader()")。
+
+      加载器应该在模块上面设置几个属性。（要知道当重新加载一个模块的时
+      候，那些属性某部分可以改变）：
+
+      * "__name__"
+           模块的名字
+
+      * "__file__"
+           模块数据存储的路径(不是为了内置的模块而设置)
+
+      * "__cached__"
+           被存储或应该被存储的模块的编译版本的路径（当这个属性不恰当
+           的时候不设置）。
+
+      * "__path__"
+           指定在一个包中搜索路径的一个字符串列表。这个属性不在模块上
+           面进行设置。
+
+      * "__package__"
+           The fully qualified name of the package under which the
+           module was loaded as a submodule (or the empty string for
+           top-level modules). For packages, it is the same as
+           "__name__".  The "importlib.util.module_for_loader()"
+           decorator can handle the details for "__package__".
+
+      * "__loader__"
+           用来加载那个模块的加载器。
+           "importlib.util.module_for_loader()" 装饰器可以处理
+           "__package__" 的细节。
+
+      当 "exec_module()" 可用的时候，那么则提供了向后兼容的功能。
+
+      在 3.4 版更改: 当这个方法被调用的时候，触发 "ImportError" 异常而
+      不是 "NotImplementedError"。当 "exec_module()" 可用的时候，使用
+      它的功能。
+
+      3.4 版后已移除: 加载模块推荐的使用的 API 是 "exec_module()" (和
+      "create_module()")。 加载器应该实现它而不是 load_module()。 当
+      exec_module() 被实现的时候，导入机制关心的是 load_module() 所有
+      其他的责任。
+
+   module_repr(module)
+
+      一个遗留方法，在实现时计算并返回给定模块的 repr，作为字符串。 模
+      块类型的默认 repr() 将根据需要使用此方法的结果。
+
+      3.3 新版功能.
+
+      在 3.4 版更改: 是可选的方法而不是一个抽象方法。
+
+      3.4 版后已移除: 现在导入机制会自动地关注这个方法。
+
+class importlib.abc.ResourceReader
+
+   *被 TraversableResources* 取代
+
+   提供读取 *resources* 能力的一个 *abstract base class* 。
+
+   从这个 ABC 的视角出发，*resource* 指一个包附带的二进制文件。常见的
+   如在包的  "__init__.py" 文件旁的数据文件。这个类存在的目的是为了将
+   对数据文件的访问进行抽象，这样包就和其数据文件的存储方式无关了。不
+   论这些文件是存放在一个 zip 文件里还是直接在文件系统内。
+
+   对于该类中的任一方法，*resource* 参数的值都需要是一个在概念上表示文
+   件名称的 *path-like object*。 这意味着任何子目录的路径都不该出现在
+   *resouce* 参数值内。 因为对于阅读器而言，包的位置就代表着「目录」。
+   因此目录和文件名就分别对应于包和资源。 这也是该类的实例都需要和一个
+   包直接关联（而不是潜在指代很多包或者一整个模块）的原因。
+
+   想支持资源读取的加载器需要提供一个返回实现了此 ABC 的接口的
+   "get_resource_reader(fullname)" 方法。如果通过全名指定的模块不是一
+   个包，这个方法应该返回 "None"。 当指定的模块是一个包时，应该只返回
+   一个与这个抽象类ABC兼容的对象。
+
+   3.7 新版功能.
+
+   abstractmethod open_resource(resource)
+
+      返回一个打开的 *file-like object* 用于 *resource* 的二进制读取。
+
+      如果无法找到资源，将会引发 "FileNotFoundError"。
+
+   abstractmethod resource_path(resource)
+
+      返回 *resource* 的文件系统路径。
+
+      如果资源并不实际存在于文件系统中，将会引发 "FileNotFoundError"。
+
+   abstractmethod is_resource(name)
+
+      如果 *name* 被视作资源，则返回True。如果 *name* 不存在，则引发
+      "FileNotFoundError" 异常。
+
+   abstractmethod contents()
+
+      反回由字符串组成的 *iterable*，表示这个包的所有内容。 请注意并不
+      要求迭代器返回的所有名称都是实际的资源，例如返回 "is_resource()"
+      为假值的名称也是可接受的。
+
+      允许非资源名字被返回是为了允许存储的一个包和它的资源的方式是已知
+      先验的并且非资源名字会有用的情况。比如，允许返回子目录名字，目的
+      是当得知包和资源存储在文件系统上面的时候，能够直接使用子目录的名
+      字。
+
+      这个抽象方法返回了一个不包含任何内容的可迭代对象。
+
+class importlib.abc.ResourceLoader
+
+   一个 *loader* 的抽象基类，它实现了可选的 **PEP 302** 协议用于从存储
+   后端加载任意资源。
+
+   3.7 版后已移除: 由于要支持使用 "importlib.abc.ResourceReader"  类来
+   加载资源，这个 ABC 已经被弃用了。
+
+   abstractmethod get_data(path)
+
+      一个用于返回位于 *path* 的字节数据的抽象方法。有一个允许存储任意
+      数据的类文件存储后端的加载器能够实现这个抽象方法来直接访问这些被
+      存储的数据。如果不能够找到 *path*，则会引发 "OSError" 异常。
+      *path* 被希望使用一个模块的 "__file" 属性或来自一个包的
+      "__path__" 来构建。
+
+      在 3.4 版更改: 引发 "OSError" 异常而不是 "NotImplementedError"
+      异常。
+
+class importlib.abc.InspectLoader
+
+   一个实现加载器检查模块可选的 **PEP 302** 协议的 *loader* 的抽象基类
+   。
+
+   get_code(fullname)
+
+      返回一个模块的代码对象，或如果模块没有一个代码对象（例如，对于内
+      置的模块来说，这会是这种情况），则为 "None"。 如果加载器不能找到
+      请求的模块，则引发 "ImportError" 异常。
+
+      注解:
+
+        当这个方法有一个默认的实现的时候，出于性能方面的考虑，如果有可
+        能的话，建议覆盖它。
+
+      在 3.4 版更改: 不再抽象并且提供一个具体的实现。
+
+   abstractmethod get_source(fullname)
+
+      一个返回模块源的抽象方法。使用 *universal newlines* 作为文本字符
+      串被返回，将所有可识别行分割符翻译成 "'\n'" 字符。 如果没有可用
+      的源（例如，一个内置模块），则返回 "None"。 如果加载器不能找到指
+      定的模块，则引发 "ImportError" 异常。
+
+      在 3.4 版更改: 引发 "ImportError" 而不是 "NotImplementedError"。
+
+   is_package(fullname)
+
+      可选方法，如果模块为包，则返回 True，否则返回 False。 如果
+      *loader* 找不到模块，则会触发 "ImportError"。
+
+      在 3.4 版更改: 引发 "ImportError" 而不是 "NotImplementedError"。
+
+   static source_to_code(data, path='<string>')
+
+      创建一个来自Python源码的代码对象。
+
+      参数 *data* 可以是任意 "compile()" 函数支持的类型（例如字符串或
+      字节串）。 参数 *path* 应该是源代码来源的路径，这可能是一个抽象
+      概念（例如位于一个 zip 文件中）。
+
+      在有后续代码对象的情况下，可以在一个模块中通过运行``exec(code,
+      module.__dict__)``来执行它。
+
+      3.4 新版功能.
+
+      在 3.5 版更改: 使得这个方法变成静态的。
+
+   exec_module(module)
+
+      "Loader.exec_module()" 的实现。
+
+      3.4 新版功能.
+
+   load_module(fullname)
+
+      "Loader.load_module()" 的实现。
+
+      3.4 版后已移除: 使用 "exec_module()" 来代替。
+
+class importlib.abc.ExecutionLoader
+
+   一个继承自 "InspectLoader" 的抽象基类，当被实现时，帮助一个模块作为
+   脚本来执行。 这个抽象基类表示可选的 **PEP 302** 协议。
+
+   abstractmethod get_filename(fullname)
+
+      一个用来为指定模块返回 "__file__" 的值的抽象方法。如果无路径可用
+      ，则引发 "ImportError"。
+
+      如果源代码可用，那么这个方法返回源文件的路径，不管是否是用来加载
+      模块的字节码。
+
+      在 3.4 版更改: 引发 "ImportError" 而不是 "NotImplementedError"。
+
+class importlib.abc.FileLoader(fullname, path)
+
+   一个继承自 "ResourceLoader" 和 "ExecutionLoader"，提供
+   "ResourceLoader.get_data()" 和 "ExecutionLoader.get_filename()" 具
+   体实现的抽象基类。
+
+   参数 *fullname* 是加载器要处理的模块的完全解析的名字。参数 *path*
+   是模块文件的路径。
+
+   3.3 新版功能.
+
+   name
+
+      加载器可以处理的模块的名字。
+
+   path
+
+      模块的文件路径
+
+   load_module(fullname)
+
+      调用super的``load_module()``。
+
+      3.4 版后已移除: 使用 "Loader.exec_module()" 来代替。
+
+   abstractmethod get_filename(fullname)
+
+      返回 "path"。
+
+   abstractmethod get_data(path)
+
+      读取 *path* 作为二进制文件并且返回来自它的字节数据。
+
+class importlib.abc.SourceLoader
+
+   一个用于实现源文件（和可选地字节码）加载的抽象基类。这个类继承自
+   "ResourceLoader" 和 "ExecutionLoader"，需要实现：
+
+   * "ResourceLoader.get_data()"
+
+   * "ExecutionLoader.get_filename()"
+        应该是只返回源文件的路径；不支持无源加载。
+
+   由这个类定义的抽象方法用来添加可选的字节码文件支持。不实现这些可选
+   的方法（或导致它们引发 "NotImplementedError" 异常）导致这个加载器只
+   能与源代码一起工作。 实现这些方法允许加载器能与源 *和* 字节码文件一
+   起工作。不允许只提供字节码的 *无源式* 加载。字节码文件是通过移除
+   Python 编译器的解析步骤来加速加载的优化，并且因此没有开放出字节码专
+   用的 API。
+
+   path_stats(path)
+
+      返回一个包含关于指定路径的元数据的 "dict" 的可选的抽象方法。 支
+      持的字典键有：
+
+      * "'mtime'" (必选项): 一个表示源码修改时间的整数或浮点数；
+
+      * "'size'" (可选项)：源码的字节大小。
+
+      字典中任何其他键会被忽略，以允许将来的扩展。 如果不能处理该路径
+      ，则会引发 "OSError"。
+
+      3.3 新版功能.
+
+      在 3.4 版更改: 引发 "OSError" 而不是 "NotImplemented"。
+
+   path_mtime(path)
+
+      返回指定文件路径修改时间的可选的抽象方法。
+
+      3.3 版后已移除: 在有了 "path_stats()" 的情况下，这个方法被弃用了
+      。 没必要去实现它了，但是为了兼容性，它依然处于可用状态。 如果文
+      件路径不能被处理，则引发 "OSError" 异常。
+
+      在 3.4 版更改: 引发 "OSError" 而不是 "NotImplemented"。
+
+   set_data(path, data)
+
+      往一个文件路径写入指定字节的的可选的抽象方法。任何中间不存在的目
+      录不会被自动创建。
+
+      由于路径是只读的，当写入的路径产生错误时（
+      "errno.EACCES"/"PermissionError"），不会传播异常。
+
+      在 3.4 版更改: 当被调用时，不再引起 "NotImplementedError" 异常。
+
+   get_code(fullname)
+
+      "InspectLoader.get_code()" 的具体实现。
+
+   exec_module(module)
+
+      "Loader.exec_module()" 的具体实现。
+
+      3.4 新版功能.
+
+   load_module(fullname)
+
+      Concrete implementation of "Loader.load_module()".
+
+      3.4 版后已移除: 使用 "exec_module()" 来代替。
+
+   get_source(fullname)
+
+      "InspectLoader.get_source()" 的具体实现。
+
+   is_package(fullname)
+
+      "InspectLoader.is_package()" 的具体实现。一个模块被确定为一个包
+      的条件是：它的文件路径（由 "ExecutionLoader.get_filename()" 提供
+      ）当文件扩展名被移除时是一个命名为 "__init__" 的文件，**并且**
+      这个模块名字本身不是以``__init__``结束。
+
+class importlib.abc.Traversable
+
+   An object with a subset of "pathlib.Path" methods suitable for
+   traversing directories and opening files.
+
+   For a representation of the object on the file-system, use
+   "importlib.resources.as_file()".
+
+   3.9 新版功能.
+
+   abstractmethod name()
+
+      此对象不带任何父引用的基准名。
+
+   abstractmethod iterdir()
+
+      产出自身内部的可遍历对象。
+
+   abstractmethod is_dir()
+
+      如果自身是一个目录则返回 True。
+
+   abstractmethod is_file()
+
+      如果自身是一个文件则返回 True。
+
+   abstractmethod joinpath(child)
+
+      返回自身中可遍历的子对象。
+
+   abstractmethod __truediv__(child)
+
+      返回自身中可遍历的子对象。
+
+   abstractmethod open(mode='r', *args, **kwargs)
+
+      *mode* 可以为 'r' 或 'rb' 即以文本或二进制模式打开。 返回一个适
+      用于读取的句柄（与 "pathlib.Path.open" 样同）。
+
+      当以文本模式打开时，接受与 "io.TextIOWrapper" 所接受的相同的编码
+      格式形参。
+
+   read_bytes()
+
+      以字节串形式读取自身的内容。
+
+   read_text(encoding=None)
+
+      以文本形式读取自身的内容。
+
+   Note: In Python 3.11 and later, this class is found in
+   "importlib.resources.abc".
+
+class importlib.abc.TraversableResources
+
+   An abstract base class for resource readers capable of serving the
+   "files" interface. Subclasses ResourceReader and provides concrete
+   implementations of the ResourceReader's abstract methods.
+   Therefore, any loader supplying TraversableResources also supplies
+   ResourceReader.
+
+   需要支持资源读取的加载器应实现此接口。
+
+   3.9 新版功能.
+
+   Note: In Python 3.11 and later, this class is found in
+   "importlib.resources.abc".
+
+
+"importlib.resources" -- 资源
+=============================
+
+**源码：** Lib/importlib/resources.py
+
+======================================================================
+
+3.7 新版功能.
+
+这个模块使得Python的导入系统提供了访问 *包* 内的 *资源* 的功能。如果能
+够导入一个包，那么就能够访问那个包里面的资源。资源可以以二进制或文本模
+式方式被打开或读取。
+
+资源非常类似于目录内部的文件，要牢记的是这仅仅是一个比喻。资源和包不是
+与文件系统上的物理文件和目录一样存在着。
+
+注解:
+
+  本模块提供了类似于 pkg_resources  Basic Resource Access 的功能，但没
+  有该包的性能开销。这样读取包中的资源就更为容易，语义也更稳定一致。该
+  模块有独立的向下移植版本， using importlib.resources  和 migrating
+  from pkg_resources to importlib.resources  提供了更多信息。
+
+加载器想要支持资源读取应该实现一个由 "importlib.abc.ResourceReader" 指
+定的``get_resource_reader(fullname)`` 方法。
+
+定义了以下类型。
+
+importlib.resources.Package
+
+   "Package" 类型定义为 "Union[str, ModuleType]" 。这意味着只要函数说
+   明接受 "Package" 的地方，就可以传入字符串或模块。模块对象必须拥有一
+   个可解析的 "__spec__.submodule_search_locations"，不能是 "None"。
+
+importlib.resources.Resource
+
+   此类型描述了传入本包各函数的资源名称。定义为 "Union[str,
+   os.PathLike]"。
+
+有以下函数可用：
+
+importlib.resources.files(package)
+
+   Returns an "importlib.abc.Traversable" object representing the
+   resource container for the package (think directory) and its
+   resources (think files). A Traversable may contain other containers
+   (think subdirectories).
+
+   *package* 是包名或符合 "Package" 要求的模块对象。
+
+   3.9 新版功能.
+
+importlib.resources.as_file(traversable)
+
+   Given a "importlib.abc.Traversable" object representing a file,
+   typically from "importlib.resources.files()", return a context
+   manager for use in a "with" statement. The context manager provides
+   a "pathlib.Path" object.
+
+   退出上下文管理程序时，可以清理所有临时文件，比如从压缩文件中提取资
+   源时创建的那些文件。
+
+   如果 Traversable 方法（"read_text" 等）不够用，需要文件系统中的实际
+   文件时，请使用 "as_file"。
+
+   3.9 新版功能.
+
+importlib.resources.open_binary(package, resource)
+
+   以二进制读方式打开 *package* 内的 *resource*。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。 *resource* 是要在
+   *package* 内打开的资源名；不能包含路径分隔符，也不能有子资源（即不
+   能为目录）。本函数将返回一个``typing.BinaryIO`` 实例以供读取，即一
+   个已打开的二进制 I/O 流。
+
+importlib.resources.open_text(package, resource, encoding='utf-8', errors='strict')
+
+   以文本读方式打开 *package* 内的 *resource*。默认情况下，资源将以
+   UTF-8 格式打开以供读取。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。 *resource* 是要在
+   *package* 内打开的资源名；不能包含路径分隔符，也不能有子资源（即不
+   能是目录）。*encoding* 和 *errors* 的含义与内置 "open()" 的一样。
+
+   本函数返回一个 "typing.TextIO" 实例，即一个打开的文本 I/O  流对象以
+   供读取。
+
+importlib.resources.read_binary(package, resource)
+
+   读取并返回 *package* 中的 *resource* 内容，格式为 "bytes"。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。 *resource* 是要在
+   *package* 内打开的资源名；不能包含路径分隔符，也不能有子资源（即不
+   能是目录）。资源内容以 "bytes" 的形式返回。
+
+importlib.resources.read_text(package, resource, encoding='utf-8', errors='strict')
+
+   读取并返回 *package* 中 *resource* 的内容，格式为 "str"。默认情况下
+   ，资源内容将以严格的 UTF-8 格式读取。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。 *resource* 是要在
+   *package* 内打开的资源名；不能包含路径分隔符，也不能有子资源（即不
+   能是目录）。*encoding* 和 *errors* 的含义与内置 "open()" 的一样。资
+   源内容将以 "str" 的形式返回。
+
+importlib.resources.path(package, resource)
+
+   返回 *resource* 实际的文件系统路径。本函数返回一个上下文管理器，以
+   供 "with" 语句中使用。上下文管理器提供一个 "pathlib.Path" 对象。
+
+   退出上下文管理程序时，可以清理所有临时文件，比如从压缩文件中提取资
+   源时创建的那些文件。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。 *resource* 是要在
+   *package* 内打开的资源名；不能包含路径分隔符，也不能有子资源（即不
+   能是目录）。
+
+importlib.resources.is_resource(package, name)
+
+   如果包中存在名为 *name* 的资源，则返回 "True"，否则返回 "False"。
+   请记住，目录 *不是* 资源！ *package* 为包名或符合 "Package" 要求的
+   模块对象。
+
+importlib.resources.contents(package)
+
+   返回一个用于遍历包内各命名项的可迭代对象。该可迭代对象将返回 "str"
+   资源（如文件）及非资源（如目录）。该迭代器不会递归进入子目录。
+
+   *package* 是包名或符合 "Package" 要求的模块对象。
+
+
+"importlib.machinery" —— 导入器和路径钩子函数。
+===============================================
+
+**源代码：** Lib/importlib/machinery.py
+
+======================================================================
+
+本模块包含多个对象，以帮助 "import" 查找并加载模块。
+
+importlib.machinery.SOURCE_SUFFIXES
+
+   一个字符串列表，表示源模块的可识别的文件后缀。
+
+   3.3 新版功能.
+
+importlib.machinery.DEBUG_BYTECODE_SUFFIXES
+
+   一个字符串列表，表示未经优化字节码模块的文件后缀。
+
+   3.3 新版功能.
+
+   3.5 版后已移除: 改用 "BYTECODE_SUFFIXES" 。
+
+importlib.machinery.OPTIMIZED_BYTECODE_SUFFIXES
+
+   一个字符串列表，表示已优化字节码模块的文件后缀。
+
+   3.3 新版功能.
+
+   3.5 版后已移除: 改用 "BYTECODE_SUFFIXES" 。
+
+importlib.machinery.BYTECODE_SUFFIXES
+
+   一个字符串列表，表示字节码模块的可识别的文件后缀（包含前导的句点符
+   号）。
+
+   3.3 新版功能.
+
+   在 3.5 版更改: 该值不再依赖于 "__debug__" 。
+
+importlib.machinery.EXTENSION_SUFFIXES
+
+   一个字符串列表，表示扩展模块的可识别的文件后缀。
+
+   3.3 新版功能.
+
+importlib.machinery.all_suffixes()
+
+   返回字符串的组合列表，代表标准导入机制可识别模块的所有文件后缀。这
+   是个助手函数，只需知道某个文件系统路径是否会指向模块，而不需要任何
+   关于模块种类的细节（例如 "inspect.getmodulename()"）。
+
+   3.3 新版功能.
+
+class importlib.machinery.BuiltinImporter
+
+   用于导入内置模块的 *importer*。 所有已知的内置模块都已列入
+   "sys.builtin_module_names"。 此类实现了
+   "importlib.abc.MetaPathFinder" 和 "importlib.abc.InspectLoader" 抽
+   象基类。
+
+   此类只定义类的方法，以减轻实例化的开销。
+
+   在 3.5 版更改: 作为 **PEP 489** 的一部分，现在内置模块导入器实现了
+   "Loader.create_module()" 和 "Loader.exec_module()"。
+
+class importlib.machinery.FrozenImporter
+
+   用于已冻结模块的 *importer*。 此类实现了
+   "importlib.abc.MetaPathFinder" 和 "importlib.abc.InspectLoader" 抽
+   象基类。
+
+   此类只定义类的方法，以减轻实例化的开销。
+
+   在 3.4 版更改: 有了 "create_module()" 和 "exec_module()" 方法。
+
+class importlib.machinery.WindowsRegistryFinder
+
+   *Finder* 用于查找在 Windows 注册表中声明的模块。该类实现了基础的
+   "importlib.abc.MetaPathFinder" 。
+
+   此类只定义类的方法，以减轻实例化的开销。
+
+   3.3 新版功能.
+
+   3.6 版后已移除: 改用 "site" 配置。未来版本的 Python 可能不会默认启
+   用该查找器。
+
+class importlib.machinery.PathFinder
+
+   用于 "sys.path" 和包的 "__path__" 属性的  *Finder* 。该类实现了基础
+   的 "importlib.abc.MetaPathFinder"。
+
+   此类只定义类的方法，以减轻实例化的开销。
+
+   classmethod find_spec(fullname, path=None, target=None)
+
+      类方法试图在 "sys.path" 或 *path* 上为 *fullname* 指定的模块查找
+      *spec*。对于每个路径条目，都会查看  "sys.path_importer_cache" 。
+      如果找到非 False 的对象，则将其用作 *path entry finder* 来查找要
+      搜索的模块。如果在 "sys.path_importer_cache" 中没有找到条目，那
+      会在 "sys.path_hooks" 检索该路径条目的查找器，找到了则和查到的模
+      块信息一起存入 "sys.path_importer_cache" 。如果查找器没有找到，
+      则缓存中的查找器和模块信息都存为 "None" ，然后返回。
+
+      3.4 新版功能.
+
+      在 3.5 版更改: 如果当前工作目录不再有效（用空字符串表示），则返
+      回 "None"，但在 "sys.path_importer_cache" 中不会有缓存值。
+
+   classmethod find_module(fullname, path=None)
+
+      一个过时的 "find_spec()" 封装对象。
+
+      3.4 版后已移除: 使用 "find_spec()" 来代替。
+
+   classmethod invalidate_caches()
+
+      为所有存于 "sys.path_importer_cache" 中的查找器，调用其
+      "importlib.abc.PathEntryFinder.invalidate_caches()" 方法。
+      "sys.path_importer_cache" 中为 "None" 的条目将被删除。
+
+      在 3.7 版更改: "sys.path_importer_cache" 中为 "None" 的条目将被
+      删除。
+
+   在 3.4 版更改: 调用 "sys.path_hooks" 中的对象，当前工作目录为 "''"
+   (即空字符串)。
+
+class importlib.machinery.FileFinder(path, *loader_details)
+
+   "importlib.abc.PathEntryFinder" 的一个具体实现，它会缓存来自文件系
+   统的结果。
+
+   参数 *path* 是查找器负责搜索的目录。
+
+   *loader_details* 参数是数量不定的二元组，每个元组包含加载器及其可识
+   别的文件后缀列表。加载器应为可调用对象，可接受两个参数，即模块的名
+   称和已找到文件的路径。
+
+   查找器将按需对目录内容进行缓存，通过对每个模块的检索进行状态统计，
+   验证缓存是否过期。因为缓存的滞后性依赖于操作系统文件系统状态信息的
+   粒度，所以搜索模块、新建文件、然后搜索新文件代表的模块，这会存在竞
+   争状态。如果这些操作的频率太快，甚至小于状态统计的粒度，那么模块搜
+   索将会失败。为了防止这种情况发生，在动态创建模块时，请确保调用
+   "importlib.invalidate_caches()"。
+
+   3.3 新版功能.
+
+   path
+
+      查找器将要搜索的路径。
+
+   find_spec(fullname, target=None)
+
+      尝试在 "path" 中找到处理 *fullname* 的规格。
+
+      3.4 新版功能.
+
+   find_loader(fullname)
+
+      试图在 "path" 内找到处理 *fullname* 的加载器。
+
+      3.10 版后已移除: 使用 "find_spec()" 来代替。
+
+   invalidate_caches()
+
+      清理内部缓存。
+
+   classmethod path_hook(*loader_details)
+
+      一个类方法，返回供 "sys.path_hooks" 使用的闭包。根据直接给出的路
+      径参数和间接给出的 *loader_details*，闭包会返回一个 "FileFinder"
+      的实例。
+
+      如果给闭包的参数不是已存在的目录，将会触发 "ImportError"。
+
+class importlib.machinery.SourceFileLoader(fullname, path)
+
+   "importlib.abc.SourceLoader" 的一个具体实现，该实现子类化了
+   "importlib.abc.FileLoader" 并提供了其他一些方法的具体实现。
+
+   3.3 新版功能.
+
+   name
+
+      该加载器将要处理的模块名称。
+
+   path
+
+      源文件的路径
+
+   is_package(fullname)
+
+      如果 "path" 看似包的路径，则返回 "True"。
+
+   path_stats(path)
+
+      "importlib.abc.SourceLoader.path_stats()" 的具体代码实现。
+
+   set_data(path, data)
+
+      "importlib.abc.SourceLoader.set_data()" 的具体代码实现。
+
+   load_module(name=None)
+
+      "importlib.abc.Loader.load_module()" 的具体代码实现，这里要加载
+      的模块名是可选的。
+
+      3.6 版后已移除: 改用 "importlib.abc.Loader.exec_module()" 。
+
+class importlib.machinery.SourcelessFileLoader(fullname, path)
+
+   "importlib.abc.FileLoader" 的具体代码实现，可导入字节码文件（也即源
+   代码文件不存在）。
+
+   请注意，直接用字节码文件（而不是源代码文件），会让模块无法应用于所
+   有的 Python 版本或字节码格式有所改动的新版本 Python。
+
+   3.3 新版功能.
+
+   name
+
+      加载器将要处理的模块名。
+
+   path
+
+      二进制码文件的路径。
+
+   is_package(fullname)
+
+      根据 "path" 确定该模块是否为包。
+
+   get_code(fullname)
+
+      返回由 "path" 创建的 "name" 的代码对象。
+
+   get_source(fullname)
+
+      因为用此加载器时字节码文件没有源码文件，所以返回 "None"。
+
+   load_module(name=None)
+
+   "importlib.abc.Loader.load_module()" 的具体代码实现，这里要加载的模
+   块名是可选的。
+
+   3.6 版后已移除: 改用 "importlib.abc.Loader.exec_module()" 。
+
+class importlib.machinery.ExtensionFileLoader(fullname, path)
+
+   "importlib.abc.ExecutionLoader" 的具体代码实现，用于扩展模块。
+
+   参数 *fullname* 指定了加载器要支持的模块名。参数 *path* 是指向扩展
+   模块文件的路径。
+
+   3.3 新版功能.
+
+   name
+
+      装载器支持的模块名。
+
+   path
+
+      扩展模块的路径。
+
+   create_module(spec)
+
+      根据 **PEP 489** ，由给定规范创建模块对象。
+
+      3.5 新版功能.
+
+   exec_module(module)
+
+      根据 **PEP 489**，初始化给定的模块对象。
+
+      3.5 新版功能.
+
+   is_package(fullname)
+
+      根据 "EXTENSION_SUFFIXES" ，如果文件路径指向某个包的 "__init__"
+      模块，则返回 "True"。
+
+   get_code(fullname)
+
+      返回 "None"，因为扩展模块缺少代码对象。
+
+   get_source(fullname)
+
+      返回 "None"，因为扩展模块没有源代码。
+
+   get_filename(fullname)
+
+      返回 "path"。
+
+      3.4 新版功能.
+
+class importlib.machinery.ModuleSpec(name, loader, *, origin=None, loader_state=None, is_package=None)
+
+   关于模块导入系统相关状态的规范。通常这是作为模块的 "__spec__" 属性
+   暴露出来。 在以下描述中，括号里的名字给出了模块对象中直接可用的属性
+   。比如 "module.__spec__.origin == module.__file__"。 但是请注意，虽
+   然 *值* 通常是相等的，但它们可以不同，因为两个对象之间没有进行同步
+   。因此 "__path__" 有可能在运行时做过更新，而这不会自动反映在
+   "__spec__.submodule_search_locations" 中。
+
+   3.4 新版功能.
+
+   name
+
+   （"__name__"）
+
+   A string for the fully qualified name of the module.
+
+   loader
+
+   （"__loader__"）
+
+   模块加载时应采用的 *Loader* 。 *Finders* 应确保设置本属性。
+
+   origin
+
+   （"__file__"）
+
+   装载模块所在位置的名称，如内置模块为 “buildin”，从源代码加载的模块
+   为文件名。通常应设置 “origin” ，但它可能为 "None" (默认值)，表示未
+   指定 (如命名空间包)。
+
+   submodule_search_locations
+
+   （"__path__"）
+
+   如果是包（否则为 ），子模块所在位置的字符串列表（否则为 "None"）。
+
+   loader_state
+
+   依模块不同的额外数据的容器，以供加载过程中使用（或 "None"）。
+
+   cached
+
+   （"__cached__"）
+
+   字符串，表示经过编译的模块所在位置（或 "None"）。
+
+   parent
+
+   （"__package__"）
+
+   (Read-only) The fully qualified name of the package under which the
+   module should be loaded as a submodule (or the empty string for
+   top-level modules). For packages, it is the same as "__name__".
+
+   has_location
+
+   布尔值，表示模块的“origin”属性是否指向可加载的位置。
+
+
+"importlib.util" —— 导入器的工具程序代码
+========================================
+
+**源代码：** Lib/importlib/util.py
+
+======================================================================
+
+本模块包含了帮助构建 *importer* 的多个对象。
+
+importlib.util.MAGIC_NUMBER
+
+   代表字节码版本号的字节串。若要有助于加载/写入字节码，可考虑采用
+   "importlib.abc.SourceLoader"。
+
+   3.4 新版功能.
+
+importlib.util.cache_from_source(path, debug_override=None, *, optimization=None)
+
+   返回 **PEP 3147**/**PEP 488** 定义的，与源 *path* 相关联的已编译字
+   节码文件的路径。 例如，如果 *path* 为 "/foo/bar/baz.py" 则 Python
+   3.2 中的返回值将是 "/foo/bar/__pycache__/baz.cpython-32.pyc"。 字符
+   串 "cpython-32" 来自于当前的魔法标签 (参见 "get_tag()"; 如果
+   "sys.implementation.cache_tag" 未定义则将会引发
+   "NotImplementedError")。
+
+   参数 *optimization* 用于指定字节码文件的优化级别。空字符串代表没有
+   优化，所以 *optimization* 为  的 "/foo/bar/baz.py"，将会得到字节码
+   路径为 "/foo/bar/__pycache__/baz.cpython-32.pyc"。"None" 会导致采用
+   解释器的优化。任何其他字符串都会被采用，所以 *optimization* 为 "''"
+   的 "/foo/bar/baz.py" 会导致字节码路径为
+   "/foo/bar/__pycache__/baz.cpython-32.opt-2.pyc"。*optimization* 字
+   符串只能是字母数字，否则会触发 "ValueError"。
+
+   *debug_override* 参数已废弃，可用于覆盖系统的 "__debug__" 值。
+   "True" 值相当于将 *optimization* 设为空字符串。"False" 则相当于
+   *optimization* 设为 "1"。如果 *debug_override* 和 *optimization* 都
+   不为 "None"，则会触发 "TypeError"。
+
+   3.4 新版功能.
+
+   在 3.5 版更改: 增加了 *optimization* 参数，废弃了 *debug_override*
+   参数。
+
+   在 3.6 版更改: 接受一个 *path-like object*。
+
+importlib.util.source_from_cache(path)
+
+   根据指向一个 **PEP 3147** 文件名的 *path*，返回相关联的源代码文件路
+   径。 举例来说，如果 *path* 为
+   "/foo/bar/__pycache__/baz.cpython-32.pyc" 则返回的路径将是
+   "/foo/bar/baz.py"。 *path* 不需要已存在，但如果它未遵循 **PEP
+   3147** 或 **PEP 488** 的格式，则会引发 "ValueError"。 如果未定义
+   "sys.implementation.cache_tag"，则会引发 "NotImplementedError"。
+
+   3.4 新版功能.
+
+   在 3.6 版更改: 接受一个 *path-like object*。
+
+importlib.util.decode_source(source_bytes)
+
+   对代表源代码的字节串进行解码，并将其作为带有通用换行符的字符串返回
+   （符合 "importlib.abc.InspectLoader.get_source()" 要求）。
+
+   3.4 新版功能.
+
+importlib.util.resolve_name(name, package)
+
+   将模块的相对名称解析为绝对名称。
+
+   如果 **name** 前面没有句点，那就简单地返回 **name**。这样就能采用
+   ``importlib.util.resolve_name('sys', __spec__.parent)`` 之类的写法
+   ，而无需检查是否需要 **package** 参数。
+
+   如果 **name** 是相对模块名称，但 **package** 为 False 值（如 "None"
+   或空字符串），则会触发 "ImportError"。 如果相对名称会离开所在的包（
+   如从 "spam" 包中请求 "..bacon"），则还会触发 "ImportError"。
+
+   3.3 新版功能.
+
+   在 3.9 版更改: 为了改善与 import 语句的一致性，对于无效的相对导入尝
+   试会引发 "ImportError" 而不是 "ValueError"。
+
+importlib.util.find_spec(name, package=None)
+
+   查找模块的 *spec*，相对指定的 **package** 名为可选参数。如果该模块
+   位于 "sys.modules" 中，则会返回 "sys.modules[name].__spec__" （除非
+   spec为 "None" 或未作设置，这时会触发 "ValueError")。否则将用
+   "sys.meta_path" 进行搜索。若找不到则返回 "None"。
+
+   如果 **name** 为一个子模块（带有一个句点），则会自动导入父级模块。
+
+   **name** 和 **package** 的用法与 "import_module()" 相同。
+
+   3.4 新版功能.
+
+   在 3.7 版更改: 如果 **package** 实际上不是一个包（即缺少 "__path__"
+   属性）则会引发 "ModuleNotFoundError" 而不是 "AttributeError"。
+
+importlib.util.module_from_spec(spec)
+
+   基于 **spec** 和 "spec.loader.create_module" 创建一个新模块。
+
+   如果 "spec.loader.create_module" 未返回 "None"，那么先前已存在的属
+   性不会被重置。另外，如果 "AttributeError" 是在访问 **spec** 或设置
+   模块属性时触发的，则不会触发 。
+
+   本函数比 "types.ModuleType" 创建新模块要好，因为用到 **spec** 模块
+   设置了尽可能多的导入控制属性。
+
+   3.5 新版功能.
+
+@importlib.util.module_for_loader
+
+   "importlib.abc.Loader.load_module()" 的一个 *decorator*，用来选取合
+   适的模块对象以供加载。被装饰方法的签名应带有两个位置参数（如：
+   "load_module(self, module)"），其中第二个参数将是加载器用到的模块
+   **对象**。请注意，由于假定有两个参数，所以装饰器对静态方法不起作用
+   。
+
+   装饰的方法将接受要加载的模块的 **name**，正如 *loader* 一样。如果在
+   "sys.modules" 中没有找到该模块，那么将构造一个新模块。不管模块来自
+   哪里， "__loader__" 设置为 **self** ，并且 "__package__" 是根据
+   "importlib.abc.InspectLoader.is_package()" 的返回值设置的。这些属性
+   会无条件进行设置以便支持再次加载。
+
+   如果被装饰的方法触发异常，并且已有模块加入 "sys.modules" 中，那么该
+   模块将被移除，以防 "sys.modules" 中残留一个部分初始化的模块。如果该
+   模块原先已在 "sys.modules" 中，则会保留不变。
+
+   在 3.3 版更改: 有可能时自动设置 "__loader__" 和 "__package__" 。
+
+   在 3.4 版更改: 无条件设置 "__name__" 、 "__loader__" 、
+   "__package__" 以支持再次加载。
+
+   3.4 版后已移除: 现在，导入机制直接执行本函数提供的所有功能。
+
+@importlib.util.set_loader
+
+   一个 *decorator*，用于 "importlib.abc.Loader.load_module()" 在返回
+   的模块上设置 "__loader__" 属性。如果该属性已被设置，装饰器就什么都
+   不做。这里假定被封装方法的第一个位置参数（即 "self"）就是
+   "__loader__" 要设置的。
+
+   在 3.4 版更改: 如果设为 "None" ，则会去设置 "__loader__" ，就像该属
+   性不存在一样。
+
+   3.4 版后已移除: 现在导入机制会自动用到本方法。
+
+@importlib.util.set_package
+
+   一个用于 "importlib.abc.Loader.load_module()" 的 *decorator* ，以便
+   设置返回模块的 "__package__" 属性。如果 "__package__" 已设置且不为
+   "None"，则不会做改动。
+
+   3.4 版后已移除: 现在导入机制会自动用到本方法。
+
+importlib.util.spec_from_loader(name, loader, *, origin=None, is_package=None)
+
+   一个工厂函数，用于创建基于加载器的 "ModuleSpec" 实例。参数的含义与
+   ModuleSpec 的相同。该函数会利用当前可用的 *loader* API，比如
+   "InspectLoader.is_package()"，以填充所有缺失的规格信息。
+
+   3.4 新版功能.
+
+importlib.util.spec_from_file_location(name, location, *, loader=None, submodule_search_locations=None)
+
+   一个工厂函数，根据文件路径创建 "ModuleSpec" 实例。缺失的信息将根据
+   spec 进行填补，利用加载器 API ，以及模块基于文件的隐含条件。
+
+   3.4 新版功能.
+
+   在 3.6 版更改: 接受一个 *path-like object*。
+
+importlib.util.source_hash(source_bytes)
+
+   以字节串的形式返回 *source_bytes* 的哈希值。基于哈希值的 ".pyc" 文
+   件在头部嵌入了对应源文件内容的 "source_hash()"。
+
+   3.7 新版功能.
+
+class importlib.util.LazyLoader(loader)
+
+   此类会延迟执行模块加载器，直至该模块有一个属性被访问到。
+
+   此类 **只** 适用于定义了 "exec_module()" 的加载器，因为需要控制模块
+   的类型。 同理，加载器的 "create_module()" 方法必须返回 "None" 或
+   "__class__"  属性可被改变且不用  *slots* 的类型。 最后，用于替换
+   "sys.modules" 内容的模块将无法工作，因为无法在整个解释器中安全地替
+   换模块的引用；如果检测到这种替换，将触发 "ValueError"。
+
+   注解:
+
+     如果项目对启动时间要求很高，只要模块未被用过，此类能够最小化加载
+     模块的开销。对于启动时间并不重要的项目来说，由于加载过程中产生的
+     错误信息会被暂时搁置，因此强烈不建议使用此类。
+
+   3.5 新版功能.
+
+   在 3.6 版更改: 开始调用 "create_module()"，移除
+   "importlib.machinery.BuiltinImporter" 和
+   "importlib.machinery.ExtensionFileLoader" 的兼容性警告。
+
+   classmethod factory(loader)
+
+      A class method which returns a callable that creates a lazy
+      loader. This is meant to be used in situations where the loader
+      is passed by class instead of by instance.
+
+         suffixes = importlib.machinery.SOURCE_SUFFIXES
+         loader = importlib.machinery.SourceFileLoader
+         lazy_loader = importlib.util.LazyLoader.factory(loader)
+         finder = importlib.machinery.FileFinder(path, (lazy_loader, suffixes))
+
+
+例子
+====
+
+
+用编程方式导入
+--------------
+
+要以编程方式导入一个模块，请使用 "importlib.import_module()" ：
+
+   import importlib
+
+   itertools = importlib.import_module('itertools')
+
+
+检查某模块可否导入。
+--------------------
+
+如果你需要在不实际执行导入的情况下确定某个模块是否可被导入，则你应当使
+用 "importlib.util.find_spec()"。
+
+请注意如果 "name" 是一个子模块（即包含一个点号），则
+"importlib.util.find_spec()" 将会导入父模块。
+
+   import importlib.util
+   import sys
+
+   # For illustrative purposes.
+   name = 'itertools'
+
+   if name in sys.modules:
+       print(f"{name!r} already in sys.modules")
+   elif (spec := importlib.util.find_spec(name)) is not None:
+       # If you chose to perform the actual import ...
+       module = importlib.util.module_from_spec(spec)
+       sys.modules[name] = module
+       spec.loader.exec_module(module)
+       print(f"{name!r} has been imported")
+   else:
+       print(f"can't find the {name!r} module")
+
+
+直接导入源码文件。
+------------------
+
+若要直接导入 Python 源码文件，请使用一下方案（仅 Python 3.5 以上版本有
+效）：
+
+   import importlib.util
+   import sys
+
+   # For illustrative purposes.
+   import tokenize
+   file_path = tokenize.__file__
+   module_name = tokenize.__name__
+
+   spec = importlib.util.spec_from_file_location(module_name, file_path)
+   module = importlib.util.module_from_spec(spec)
+   sys.modules[module_name] = module
+   spec.loader.exec_module(module)
+
+
+实现延迟导入
+------------
+
+以下例子展示了如何实现延迟导入：
+
+   >>> import importlib.util
+   >>> import sys
+   >>> def lazy_import(name):
+   ...     spec = importlib.util.find_spec(name)
+   ...     loader = importlib.util.LazyLoader(spec.loader)
+   ...     spec.loader = loader
+   ...     module = importlib.util.module_from_spec(spec)
+   ...     sys.modules[name] = module
+   ...     loader.exec_module(module)
+   ...     return module
+   ...
+   >>> lazy_typing = lazy_import("typing")
+   >>> #lazy_typing is a real module object,
+   >>> #but it is not loaded in memory yet.
+   >>> lazy_typing.TYPE_CHECKING
+   False
+
+
+导入器的配置
+------------
+
+对于深度定制的导入，通常需要实现一个 *importer*。 这意味着得同时管理
+*finder* 和 *loader*。 根据不同的需求，有两种类型的查找器可供选择：
+*meta path finder* 或 *path entry finder*。 前者应位于 "sys.meta_path"
+之上，而后者是用 *path entry hook* 在 "sys.path_hooks" 上创建但与
+"sys.path" 一起工作，可能会创建一个查找器。以下例子将演示如何注册自己
+的导入器，以供导入使用（关于自建导入器请阅读本包内定义的类文档）：
+
+   import importlib.machinery
+   import sys
+
+   # For illustrative purposes only.
+   SpamMetaPathFinder = importlib.machinery.PathFinder
+   SpamPathEntryFinder = importlib.machinery.FileFinder
+   loader_details = (importlib.machinery.SourceFileLoader,
+                     importlib.machinery.SOURCE_SUFFIXES)
+
+   # Setting up a meta path finder.
+   # Make sure to put the finder in the proper location in the list in terms of
+   # priority.
+   sys.meta_path.append(SpamMetaPathFinder)
+
+   # Setting up a path entry finder.
+   # Make sure to put the path hook in the proper location in the list in terms
+   # of priority.
+   sys.path_hooks.append(SpamPathEntryFinder.path_hook(loader_details))
+
+
+"importlib.import_module()" 的近似实现
+--------------------------------------
+
+导入过程本身是用 Python 代码实现的，这样就能通过 importlib 将大多数导
+入机制暴露出来。以下代码近似实现了 "importlib.import_module()" ，以帮
+助说明 importlib 暴露出来的各种 API （importlib 的用法适用于 Python
+3.4 以上版本 ，其他代码适用于 Python 3.6 以上版本）。
+
+   import importlib.util
+   import sys
+
+   def import_module(name, package=None):
+       """An approximate implementation of import."""
+       absolute_name = importlib.util.resolve_name(name, package)
+       try:
+           return sys.modules[absolute_name]
+       except KeyError:
+           pass
+
+       path = None
+       if '.' in absolute_name:
+           parent_name, _, child_name = absolute_name.rpartition('.')
+           parent_module = import_module(parent_name)
+           path = parent_module.__spec__.submodule_search_locations
+       for finder in sys.meta_path:
+           spec = finder.find_spec(absolute_name, path)
+           if spec is not None:
+               break
+       else:
+           msg = f'No module named {absolute_name!r}'
+           raise ModuleNotFoundError(msg, name=absolute_name)
+       module = importlib.util.module_from_spec(spec)
+       sys.modules[absolute_name] = module
+       spec.loader.exec_module(module)
+       if path is not None:
+           setattr(parent_module, child_name, module)
+       return module

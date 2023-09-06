@@ -1,0 +1,189 @@
+"email.mime": 从头创建电子邮件和 MIME 对象
+******************************************
+
+**源代码:** Lib/email/mime/
+
+======================================================================
+
+此模块是旧版 ("Compat32") 电子邮件 API 的组成部分。 它的功能在新版 API
+中被 "contentmanager" 部分替代，但在某些应用中这些类仍可能有用，即使是
+在非旧版代码中。
+
+通常，你是通过传递一个文件或一些文本到解析器来获得消息对象结构体的，解
+析器会解析文本并返回根消息对象。 不过你也可以从头开始构建一个完整的消
+息结构体，甚至是手动构建单独的 "Message" 对象。 实际上，你也可以接受一
+个现有的结构体并添加新的 "Message" 对象并移动它们。 这为切片和分割
+MIME 消息提供了非常方便的接口。
+
+你可以通过创建 "Message" 实例并手动添加附件和所有适当的标头来创建一个
+新的对象结构体。  不过对于 MIME 消息来说，"email" 包提供了一些便捷子类
+来让事情变得更容易。
+
+这些类列示如下:
+
+class email.mime.base.MIMEBase(_maintype, _subtype, *, policy=compat32, **_params)
+
+   模块: "email.mime.base"
+
+   这是 "Message" 的所有 MIME 专属子类。 通常你不会创建专门的
+   "MIMEBase" 实例，尽管你可以这样做。 "MIMEBase" 主要被提供用来作为更
+   具体的 MIME 感知子类的便捷基类。
+
+   *_maintype* 是 *Content-Type* 的主类型 (例如 *text* 或 *image*)，而
+   *_subtype* 是 *Content-Type* 的次类型 (例如 *plain* 或 *gif*)。
+   *_params* 是一个形参键/值字典并会被直接传递给 "Message.add_header"
+   。
+
+   如果指定了 *policy* (默认为 "compat32" 策略)，它将被传递给
+   "Message"。
+
+   "MIMEBase" 类总是会添加一个 *Content-Type* 标头 (基于 *_maintype*,
+   *_subtype* 和 *_params*)，以及一个 *MIME-Version* 标头 (总是设为
+   "1.0")。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.nonmultipart.MIMENonMultipart
+
+   模块: "email.mime.nonmultipart"
+
+   "MIMEBase" 的子类，这是用于非 *multipart* MIME 消息的中间基类。 这
+   个类的主要目标是避免使用 "attach()" 方法，该方法仅对 *multipart* 消
+   息有意义。 如果 "attach()" 被调用，则会引发
+   "MultipartConversionError" 异常。
+
+class email.mime.multipart.MIMEMultipart(_subtype='mixed', boundary=None, _subparts=None, *, policy=compat32, **_params)
+
+   模块: "email.mime.multipart"
+
+   "MIMEBase" 的子类，这是用于 *multipart* MIME 消息的中间基类。 可选
+   的 *_subtype* 默认为 *mixed*，但可被用来指定消息的子类型。 将会在消
+   息对象中添加一个:mimetype:*multipart/_subtype* 的 *Content-Type* 标
+   头。 并还将添加一个 *MIME-Version* 标头。
+
+   可选的 *boundary* 是多部分边界字符串。 当为 "None" (默认值) 时，则
+   会在必要时（例如当消息被序列化时）计算边界。
+
+   *_subparts* 是载荷初始子部分的序列。 此序列必须可以被转换为列表。
+   你总是可以使用 "Message.attach" 方法将新的子部分附加到消息中。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   用于 *Content-Type* 标头的附加形参会从关键字参数中获取，或者传入到
+   *_params* 参数，该参数是一个关键字的字典。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.application.MIMEApplication(_data, _subtype='octet-stream', _encoder=email.encoders.encode_base64, *, policy=compat32, **_params)
+
+   模块: "email.mime.application"
+
+   A subclass of "MIMENonMultipart", the "MIMEApplication" class is
+   used to represent MIME message objects of major type *application*.
+   *_data* contains the bytes for the raw application data.  Optional
+   *_subtype* specifies the MIME subtype and defaults to *octet-
+   stream*.
+
+   可选的 *_encoder* 是一个可调用对象（即函数），它将执行实际的数据编
+   码以便传输。 这个可调用对象接受一个参数，该参数是 "MIMEApplication"
+   的实例。 它应当使用 "get_payload()" 和 "set_payload()" 来将载荷改为
+   已编码形式。 它还应根据需要将任何 *Content-Transfer-Encoding* 或其
+   他标头添加到消息对象中。 默认编码格式为 base64。 请参阅
+   "email.encoders" 模块来查看内置编码器列表。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   *_params* 会被直接传递给基类的构造器。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.audio.MIMEAudio(_audiodata, _subtype=None, _encoder=email.encoders.encode_base64, *, policy=compat32, **_params)
+
+   模块: "email.mime.audio"
+
+   A subclass of "MIMENonMultipart", the "MIMEAudio" class is used to
+   create MIME message objects of major type *audio*. *_audiodata*
+   contains the bytes for the raw audio data.  If this data can be
+   decoded by the standard Python module "sndhdr", then the subtype
+   will be automatically included in the *Content-Type* header.
+   Otherwise you can explicitly specify the audio subtype via the
+   *_subtype* argument.  If the minor type could not be guessed and
+   *_subtype* was not given, then "TypeError" is raised.
+
+   可选的 *_encoder* 是一个可调用对象（即函数），它将执行实际的音频数
+   据编码以便传输。  这个可调用对象接受一个参数，该参数是 "MIMEAudio"
+   的实例。 它应当使用 "get_payload()" 和 "set_payload()" 来将载荷改为
+   已编码形式。 它还应根据需要将任何 *Content-Transfer-Encoding* 或其
+   他标头添加到消息对象中。 默认编码格式为 base64。 请参阅
+   "email.encoders" 模块来查看内置编码器列表。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   *_params* 会被直接传递给基类的构造器。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.image.MIMEImage(_imagedata, _subtype=None, _encoder=email.encoders.encode_base64, *, policy=compat32, **_params)
+
+   模块: "email.mime.image"
+
+   A subclass of "MIMENonMultipart", the "MIMEImage" class is used to
+   create MIME message objects of major type *image*. *_imagedata*
+   contains the bytes for the raw image data.  If this data can be
+   decoded by the standard Python module "imghdr", then the subtype
+   will be automatically included in the *Content-Type* header.
+   Otherwise you can explicitly specify the image subtype via the
+   *_subtype* argument.  If the minor type could not be guessed and
+   *_subtype* was not given, then "TypeError" is raised.
+
+   可选的 *_encoder* 是一个可调用对象（即函数），它将执行实际的图像数
+   据编码以便传输。 这个可调用对象接受一个参数，该参数是 "MIMEImage"
+   的实例。 它应当使用 "get_payload()" 和 "set_payload()" 来将载荷改为
+   已编码形式。 它还应根据需要将任何 *Content-Transfer-Encoding* 或其
+   他标头添加到消息对象中。 默认编码格式为 base64。 请参阅
+   "email.encoders" 模块来查看内置编码器列表。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   *_params* 会被直接传递给 "MIMEBase" 构造器。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.message.MIMEMessage(_msg, _subtype='rfc822', *, policy=compat32)
+
+   模块: "email.mime.message"
+
+   "MIMENonMultipart" 的子类，"MIMEMessage" 类被用来创建主类型为
+   *message* 的 MIME 对象。 *_msg* 将被用作载荷，并且必须为 "Message"
+   类（或其子类）的实例，否则会引发 "TypeError"。
+
+   可选的 *_subtype* 设置消息的子类型；它的默认值为 *rfc822*。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。
+
+class email.mime.text.MIMEText(_text, _subtype='plain', _charset=None, *, policy=compat32)
+
+   模块: "email.mime.text"
+
+   "MIMENonMultipart" 的子类，"MIMEText" 类被用来创建主类型为 *text*
+   的 MIME 对象。 *_text* 是用作载荷的字符串。  *_subtype* 指定子类型
+   并且默认为 *plain*。 *_charset* 是文本的字符集并会作为参数传递给
+   "MIMENonMultipart" 构造器；如果该字符串仅包含 "ascii" 码位则其默认
+   值为 "us-ascii"，否则为 "utf-8"。 *_charset* 形参接受一个字符串或是
+   一个 "Charset" 实例。
+
+   除非 *_charset* 参数被显式地设为 "None"，否则所创建的 MIMEText 对象
+   将同时具有附带 "charset" 形参的 *Content-Type* 标头，以及 *Content-
+   Transfer-Encoding* 标头。 这意味着后续的 "set_payload" 调用将不再产
+   生已编码的载荷，即使它在 "set_payload" 命令中被传入。 你可以通过删
+   除 "Content-Transfer-Encoding" 标头来“重置”此行为，在此之后的
+   "set_payload" 调用将自动编码新的载荷（并添加新的 *Content-Transfer-
+   Encoding* 标头）。
+
+   可选的 *policy* 参数默认为 "compat32"。
+
+   在 3.5 版更改: *_charset* 也可接受 "Charset" 实例。
+
+   在 3.6 版更改: 添加了 *policy* 仅限关键字形参。

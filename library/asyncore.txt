@@ -1,0 +1,283 @@
+"asyncore" --- 异步套接字处理器
+*******************************
+
+**源码：** Lib/asyncore.py
+
+3.6 版后已移除: "asyncore" 将在 Python 3.12 版被移除（请参阅 **PEP
+594** 了解详情）。 请改用 "asyncio"。
+
+======================================================================
+
+注解:
+
+  该模块仅为提供向后兼容。我们推荐在新代码中使用 "asyncio" 。
+
+该模块提供用于编写异步套接字服务客户端与服务端的基础构件。
+
+只有两种方法让单个处理器上的程序“同一时间完成不止一件事”。 多线程编程
+是最简单和最流行的方法，但是还有另一种非常不同的技术，它可以让你拥有多
+线程的几乎所有优点，而无需实际使用多线程。 它仅仅在你的程序主要受 I/O
+限制时有用，那么。 如果你的程序受处理器限制，那么先发制人的预定线程可
+能就是你真正需要的。 但是，网络服务器很少受处理器限制。
+
+如果你的操作系统在其 I/O 库中支持 "select()" 系统调用（几乎所有操作系
+统），那么你可以使用它来同时处理多个通信通道；在 I/O 正在“后台”时进行
+其他工作。 虽然这种策略看起来很奇怪和复杂，特别是起初，它在很多方面比
+多线程编程更容易理解和控制。 "asyncore" 模块为您解决了许多难题，使得构
+建复杂的高性能网络服务器和客户端的任务变得轻而易举。 对于“会话”应用程
+序和协议，伴侣 "asynchat" 模块是非常宝贵的。
+
+这两个模块背后的基本思想是创建一个或多个网络 *通道* ，类的实例
+"asyncore.dispatcher" 和 "asynchat.async_chat" 。 创建通道会将它们添加
+到全局映射中，如果你不为它提供自己的 *映射* ，则由 "loop()" 函数使用。
+
+一旦创建了初始通道，调用 "loop()" 函数将激活通道服务，该服务将一直持续
+到最后一个通道（包括在异步服务期间已添加到映射中的任何通道）关闭。
+
+asyncore.loop([timeout[, use_poll[, map[, count]]]])
+
+   进入一个轮询循环，其在循环计数超出或所有打开的通道关闭后终止。 所有
+   参数都是可选的。 *count* 形参默认为 "None" ，导致循环仅在所有通道关
+   闭时终止。 *timeout* 形参为适当的 "select()" 或 "poll()" 调用设置超
+   时参数，以秒为单位; 默认值为30秒。 *use_poll* 形参，如果为 True ，
+   则表示 "poll()" 应优先使用 "select()" (默认为``False``)。
+
+   *map* 形参是一个条目为所监视通道的字典。 当通道关闭时它们会被从映射
+   中删除。 如果省略 *map*，则会使用一个全局映射。 通道
+   ("asyncore.dispatcher", "asynchat.async_chat" 及其子类的实例) 可以
+   在映射中任意混合。
+
+class asyncore.dispatcher
+
+   "dispatcher" 类是对低层级套接字对象的轻量包装器。 要让它更有用处，
+   可以从异步循环调用一些事件处理方法。 在其他方面，它可以被当作是普通
+   的非阻塞型套接字对象。
+
+   在特定时间或特定连接状态下触发的低层级事件可通知异步循环发生了特定
+   的高层级事件。 例如，如果我们请求了一个套接字以连接到另一台主机，我
+   们会在套接字首次变得可写时得知连接已建立（在此刻你将知道可以向其写
+   入并预期能够成功）。 包含的高层级事件有:
+
+   +------------------------+------------------------------------------+
+   | 事件                   | 描述                                     |
+   |========================|==========================================|
+   | "handle_connect()"     | 由首个读取或写入事件引起                 |
+   +------------------------+------------------------------------------+
+   | "handle_close()"       | 由不带可用数据的读取事件引起             |
+   +------------------------+------------------------------------------+
+   | "handle_accepted()"    | 由在监听套接字上的读取事件引起           |
+   +------------------------+------------------------------------------+
+
+   在异步处理过程中，每个已映射通道的 "readable()" 和 "writable()" 方
+   法会被用来确定是否要将通道的套接字添加到已执行 "select()" 或
+   "poll()" 用于读取和写入事件的通道列表中。
+
+   因此，通道事件的集合要大于基本套接字事件。 可以在你的子类中被重载的
+   全部方法集合如下:
+
+   handle_read()
+
+      当异步循环检测到通道的套接字上的 "read()" 调用将要成功时会被调用
+      。
+
+   handle_write()
+
+      当异步循环检测到一个可写套接字可以被写入时会被调用。 通常此方法
+      将实现必要的缓冲机制以保证运行效率。 例如:
+
+         def handle_write(self):
+             sent = self.send(self.buffer)
+             self.buffer = self.buffer[sent:]
+
+   handle_expt()
+
+      当一个套接字连接存在带外（OOB）数据时会被调用。 这几乎从来不会发
+      生，因为 OOB 虽然受支持但很少被使用。
+
+   handle_connect()
+
+      当活动打开方的套接字实际建立连接时会被调用。 可能会发送一条“欢迎
+      ”消息，或者向远程端点发起协议协商等。
+
+   handle_close()
+
+      当套接字关闭时会被调用。
+
+   handle_error()
+
+      当一个异常被引发并且未获得其他处理时会被调用。 默认版本将打印精
+      简的回溯信息。
+
+   handle_accept()
+
+      当可以与发起对本地端点的 "connect()" 调用的新远程端点建立连接时
+      会在侦听通道（被动打开方）上被调用。 在 3.2 版中已被弃用；请改用
+      "handle_accepted()"。
+
+      3.2 版后已移除.
+
+   handle_accepted(sock, addr)
+
+      当与发起对本地端点的 "connect()" 调用的新远程端点已建立连接时会
+      在侦听通道（被动打开方）上被调用。 *sock* 是可被用于在连接上发送
+      和接收数据的 *新建* 套接字对象，而 *addr* 是绑定到连接另一端的套
+      接字的地址。
+
+      3.2 新版功能.
+
+   readable()
+
+      每次在异步循环之外被调用以确定是否应当将一个通道的套接字添加到可
+      能在其上发生读取事件的列表中。 默认方法会简单地返回 "True"，表示
+      在默认情况下，所有通道都希望能读取事件。
+
+   writable()
+
+      每次在异步循环之外被调用以确定是否应当将一个通道的套接字添加到可
+      能在其上发生写入事件的列表中。 默认方法会简单地返回 "True"，表示
+      在默认情况下，所有通道都希望能写入事件。
+
+   此外，每个通道都委托或扩展了许多套接字方法。 它们大部分都与其套接字
+   的对应方法几乎一样。
+
+   create_socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+
+      这与普通套接字的创建相同，并会使用同样的创建选项。 请参阅
+      "socket" 文档了解有关创建套接字的信息。
+
+      在 3.3 版更改: *family* 和 *type* 参数可以被省略。
+
+   connect(address)
+
+      与普通套接字对象一样，*address* 是一个元组，它的第一个元素是要连
+      接的主机，第二个元素是端口号。
+
+   send(data)
+
+      将 *data* 发送到套接字的远程端点。
+
+   recv(buffer_size)
+
+      从套接字的远程端点读取至多 *buffer_size* 个字节。 读到空字节串表
+      明通道已从另一端被关闭。
+
+      请注意 "recv()" 可能会引发 "BlockingIOError"，即使
+      "select.select()" 或 "select.poll()" 报告套接字已准备好被读取。
+
+   listen(backlog)
+
+      侦听与套接字的连接。 *backlog* 参数指明排入连接队列的最大数量且
+      至少应为 1；最大值取决于具体系统（通常为 5）。
+
+   bind(address)
+
+      将套接字绑定到 *address*。 套接字必须尚未被绑定。  (*address* 的
+      格式取决于具体的地址族 --- 请参阅 "socket" 文档了解更多信息。)
+      要将套接字标记为可重用的 (设置 "SO_REUSEADDR" 选项)，请调用
+      "dispatcher" 对象的 "set_reuse_addr()" 方法。
+
+   accept()
+
+      接受一个连接。 此套接字必须绑定到一个地址上并且侦听连接。 返回值
+      可以是 "None" 或一个 "(conn, address)" 对，其中 *conn* 是一个可
+      用来在此连接上发送和接收数据的  *新的* 套接字对象，而 *address*
+      是绑定到连接另一端套接字的地址。 当返回 "None" 时意味着连接没有
+      建立，在此情况下服务器应当忽略此事件并继续侦听后续的入站连接。
+
+   close()
+
+      关闭套接字。 在此套接字对象上的后续操作都将失败。 远程端点将不再
+      接收任何数据（在排入队列的数据被清空之后）。 当套接字被垃圾回收
+      时会自动关闭。
+
+class asyncore.dispatcher_with_send
+
+   "dispatcher" 的一个添加了简单缓冲输出功能的子类，适用于简单客户端。
+   对于更复杂的用法请使用 "asynchat.async_chat"。
+
+class asyncore.file_dispatcher
+
+   file_dispatcher 接受一个文件描述符或 *file object* 以及一个可选的
+   map 参数，并对其进行包装以配合 "poll()" 或 "loop()" 函数使用。 如果
+   提供一个文件对象或任何具有 "fileno()" 方法的对象，其方法将被调用并
+   传递给 "file_wrapper" 构造器。
+
+   可用性: Unix。
+
+class asyncore.file_wrapper
+
+   file_wrapper 接受一个整数形式的文件描述符并调用 "os.dup()" 来复制其
+   句柄，以便原始句柄可以独立于 file_wrapper 被关闭。 这个类实现了足够
+   的方法来模拟套接字以供 "file_dispatcher" 类使用。
+
+   可用性: Unix。
+
+
+asyncore 示例基本 HTTP 客户端
+=============================
+
+下面是一个非常基本的 HTTP 客户端，它使用了 "dispatcher" 类来实现套接字
+处理:
+
+   import asyncore
+
+   class HTTPClient(asyncore.dispatcher):
+
+       def __init__(self, host, path):
+           asyncore.dispatcher.__init__(self)
+           self.create_socket()
+           self.connect( (host, 80) )
+           self.buffer = bytes('GET %s HTTP/1.0\r\nHost: %s\r\n\r\n' %
+                               (path, host), 'ascii')
+
+       def handle_connect(self):
+           pass
+
+       def handle_close(self):
+           self.close()
+
+       def handle_read(self):
+           print(self.recv(8192))
+
+       def writable(self):
+           return (len(self.buffer) > 0)
+
+       def handle_write(self):
+           sent = self.send(self.buffer)
+           self.buffer = self.buffer[sent:]
+
+
+   client = HTTPClient('www.python.org', '/')
+   asyncore.loop()
+
+
+asyncore 示例基本回显服务器
+===========================
+
+下面是一个基本的回显服务器，它使用了 "dispatcher" 类来接受连接并将入站
+连接发送给处理程序:
+
+   import asyncore
+
+   class EchoHandler(asyncore.dispatcher_with_send):
+
+       def handle_read(self):
+           data = self.recv(8192)
+           if data:
+               self.send(data)
+
+   class EchoServer(asyncore.dispatcher):
+
+       def __init__(self, host, port):
+           asyncore.dispatcher.__init__(self)
+           self.create_socket()
+           self.set_reuse_addr()
+           self.bind((host, port))
+           self.listen(5)
+
+       def handle_accepted(self, sock, addr):
+           print('Incoming connection from %s' % repr(addr))
+           handler = EchoHandler(sock)
+
+   server = EchoServer('localhost', 8080)
+   asyncore.loop()

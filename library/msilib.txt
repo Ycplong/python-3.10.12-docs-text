@@ -1,0 +1,457 @@
+"msilib" --- 读写 Microsoft Installer 文件
+******************************************
+
+**源代码:** Lib/msilib/__init__.py
+
+3.11 版后已移除: "msilib" 模块已被弃用（请参阅 **PEP 594** 了解详情）
+。
+
+======================================================================
+
+"msilib" 支持创建 Microsoft 安装程序 (".msi") 文件。 由于这种文件往往
+包含一个嵌入的 "cabinet" 文件 (".cab")，它也暴露了一个用于创建 CAB 文
+件的 API。  目前没有实现对读取 ".cab" 文件的支持；对于读取 ".msi" 数据
+库的支持则是可能的。
+
+这个包的目标是提供对 ".msi" 文件中的全部表的完整访问，因此，它是一个相
+当低层级的 API。 这个包的两个主要应用是 "distutils" 命令 "bdist_msi"，
+以及创建 Python 安装程序包本身 (尽管它目前是使用不同版本的 "msilib")。
+
+这个包的内容可以大致分为四个部分：低层级 CAB 例程、低层级 MSI 例程、高
+层级 MSI 例程以及标准表结构。
+
+msilib.FCICreate(cabname, files)
+
+   新建一个名为 *cabname* 的 CAB 文件。 *files* 必须是一个元组的列表，
+   其中每个元组包含磁盘文件的名称，以及 CAB 文件内文件的名称。
+
+   这些文件将按照它们在列表中出现的顺序被添加到 CAB 文件中。 所有文件
+   都会被添加到单个 CAB 文件，使用 MSZIP 压缩算法。
+
+   目前没有暴露 MSI 创建的各个步骤对 Python 的回调。
+
+msilib.UuidCreate()
+
+   返回一个新的唯一标识符的字符串表示形式。 这封装了 Windows API 函数
+   "UuidCreate()" 和 "UuidToString()"。
+
+msilib.OpenDatabase(path, persist)
+
+   通过调用 MsiOpenDatabase 来返回一个新的数据库对象。 *path* 为 MSI
+   文件的名称；*persist* 可以是常量 "MSIDBOPEN_CREATEDIRECT",
+   "MSIDBOPEN_CREATE", "MSIDBOPEN_DIRECT", "MSIDBOPEN_READONLY" 或
+   "MSIDBOPEN_TRANSACT" 中的一个，并可能包括旗标 "MSIDBOPEN_PATCHFILE"
+   。 请参阅 Microsoft 文档了解这些旗标的含义；根据这些旗标，将打开一
+   个现有数据库，或者创建一个新数据库。
+
+msilib.CreateRecord(count)
+
+   通过调用 "MSICreateRecord()" 来返回一个新的记录对象。 *count* 为记
+   录的字段数量。
+
+msilib.init_database(name, schema, ProductName, ProductCode, ProductVersion, Manufacturer)
+
+   创建并返回一个新的数据库 *name*，使用 *schema* 来初始化它，并设置属
+   性 *ProductName*, *ProductCode*, *ProductVersion* 和 *Manufacturer*
+   。
+
+   *schema* 必须是一个包含 "tables" 和 "_Validation_records" 属性的模
+   块对象；在通常情况下，"msilib.schema" 应当被使用。
+
+   此此函数返回时该数据库将只包含表结构和验证记录。
+
+msilib.add_data(database, table, records)
+
+   将所有 *records* 添加到 *database* 中名为 *table* 的表。
+
+   *table* 参数必须为 MSI 方案中预定义的表之一，即 "'Feature'",
+   "'File'", "'Component'", "'Dialog'", "'Control'" 等等。
+
+   *records* 应当为一个元组的列表，其中的每个元组都包含与表结构对应的
+   记录的所有字段。 对于可选字段，可以传入 "None"。
+
+   字段值可以为整数、字符串或 Binary 类的实例。
+
+class msilib.Binary(filename)
+
+   代表 Binary 表中的条目；使用 "add_data()" 插入这样的对象会将名为
+   *filename* 文件读入表中。
+
+msilib.add_tables(database, module)
+
+   将来自 *module* 的所有表内容添加到 *database*。 *module* 必须包括一
+   个列出其内容需要被添加的所有表的属性 *tables*，并且每个具有实际内容
+   的表对应一个属性。
+
+   这通常被用来安装序列表。
+
+msilib.add_stream(database, name, path)
+
+   将文件 *path* 添加到 *database* 的 "_Stream" 表，使用流名称 *name*
+   。
+
+msilib.gen_uuid()
+
+   Return a new UUID, in the format that MSI typically requires (i.e.
+   in curly braces, and with all hexdigits in upper-case).
+
+参见: FCICreate UuidCreate UuidToString
+
+
+Database Objects
+================
+
+Database.OpenView(sql)
+
+   Return a view object, by calling "MSIDatabaseOpenView()". *sql* is
+   the SQL statement to execute.
+
+Database.Commit()
+
+   Commit the changes pending in the current transaction, by calling
+   "MSIDatabaseCommit()".
+
+Database.GetSummaryInformation(count)
+
+   Return a new summary information object, by calling
+   "MsiGetSummaryInformation()".  *count* is the maximum number of
+   updated values.
+
+Database.Close()
+
+   Close the database object, through "MsiCloseHandle()".
+
+   3.7 新版功能.
+
+参见:
+
+  MSIDatabaseOpenView MSIDatabaseCommit MSIGetSummaryInformation
+  MsiCloseHandle
+
+
+View Objects
+============
+
+View.Execute(params)
+
+   Execute the SQL query of the view, through "MSIViewExecute()". If
+   *params* is not "None", it is a record describing actual values of
+   the parameter tokens in the query.
+
+View.GetColumnInfo(kind)
+
+   Return a record describing the columns of the view, through calling
+   "MsiViewGetColumnInfo()". *kind* can be either "MSICOLINFO_NAMES"
+   or "MSICOLINFO_TYPES".
+
+View.Fetch()
+
+   Return a result record of the query, through calling
+   "MsiViewFetch()".
+
+View.Modify(kind, data)
+
+   Modify the view, by calling "MsiViewModify()". *kind* can be one of
+   "MSIMODIFY_SEEK", "MSIMODIFY_REFRESH", "MSIMODIFY_INSERT",
+   "MSIMODIFY_UPDATE", "MSIMODIFY_ASSIGN", "MSIMODIFY_REPLACE",
+   "MSIMODIFY_MERGE", "MSIMODIFY_DELETE",
+   "MSIMODIFY_INSERT_TEMPORARY", "MSIMODIFY_VALIDATE",
+   "MSIMODIFY_VALIDATE_NEW", "MSIMODIFY_VALIDATE_FIELD", or
+   "MSIMODIFY_VALIDATE_DELETE".
+
+   *data* must be a record describing the new data.
+
+View.Close()
+
+   Close the view, through "MsiViewClose()".
+
+参见:
+
+  MsiViewExecute MSIViewGetColumnInfo MsiViewFetch MsiViewModify
+  MsiViewClose
+
+
+Summary Information Objects
+===========================
+
+SummaryInformation.GetProperty(field)
+
+   Return a property of the summary, through
+   "MsiSummaryInfoGetProperty()". *field* is the name of the property,
+   and can be one of the constants "PID_CODEPAGE", "PID_TITLE",
+   "PID_SUBJECT", "PID_AUTHOR", "PID_KEYWORDS", "PID_COMMENTS",
+   "PID_TEMPLATE", "PID_LASTAUTHOR", "PID_REVNUMBER",
+   "PID_LASTPRINTED", "PID_CREATE_DTM", "PID_LASTSAVE_DTM",
+   "PID_PAGECOUNT", "PID_WORDCOUNT", "PID_CHARCOUNT", "PID_APPNAME",
+   or "PID_SECURITY".
+
+SummaryInformation.GetPropertyCount()
+
+   Return the number of summary properties, through
+   "MsiSummaryInfoGetPropertyCount()".
+
+SummaryInformation.SetProperty(field, value)
+
+   Set a property through "MsiSummaryInfoSetProperty()". *field* can
+   have the same values as in "GetProperty()", *value* is the new
+   value of the property. Possible value types are integer and string.
+
+SummaryInformation.Persist()
+
+   Write the modified properties to the summary information stream,
+   using "MsiSummaryInfoPersist()".
+
+参见:
+
+  MsiSummaryInfoGetProperty MsiSummaryInfoGetPropertyCount
+  MsiSummaryInfoSetProperty MsiSummaryInfoPersist
+
+
+Record Objects
+==============
+
+Record.GetFieldCount()
+
+   Return the number of fields of the record, through
+   "MsiRecordGetFieldCount()".
+
+Record.GetInteger(field)
+
+   Return the value of *field* as an integer where possible.  *field*
+   must be an integer.
+
+Record.GetString(field)
+
+   Return the value of *field* as a string where possible.  *field*
+   must be an integer.
+
+Record.SetString(field, value)
+
+   Set *field* to *value* through "MsiRecordSetString()". *field* must
+   be an integer; *value* a string.
+
+Record.SetStream(field, value)
+
+   Set *field* to the contents of the file named *value*, through
+   "MsiRecordSetStream()". *field* must be an integer; *value* a
+   string.
+
+Record.SetInteger(field, value)
+
+   Set *field* to *value* through "MsiRecordSetInteger()". Both
+   *field* and *value* must be an integer.
+
+Record.ClearData()
+
+   Set all fields of the record to 0, through "MsiRecordClearData()".
+
+参见:
+
+  MsiRecordGetFieldCount MsiRecordSetString MsiRecordSetStream
+  MsiRecordSetInteger MsiRecordClearData
+
+
+Errors
+======
+
+All wrappers around MSI functions raise "MSIError"; the string inside
+the exception will contain more detail.
+
+
+CAB Objects
+===========
+
+class msilib.CAB(name)
+
+   The class "CAB" represents a CAB file. During MSI construction,
+   files will be added simultaneously to the "Files" table, and to a
+   CAB file. Then, when all files have been added, the CAB file can be
+   written, then added to the MSI file.
+
+   *name* is the name of the CAB file in the MSI file.
+
+   append(full, file, logical)
+
+      Add the file with the pathname *full* to the CAB file, under the
+      name *logical*.  If there is already a file named *logical*, a
+      new file name is created.
+
+      Return the index of the file in the CAB file, and the new name
+      of the file inside the CAB file.
+
+   commit(database)
+
+      Generate a CAB file, add it as a stream to the MSI file, put it
+      into the "Media" table, and remove the generated file from the
+      disk.
+
+
+Directory Objects
+=================
+
+class msilib.Directory(database, cab, basedir, physical, logical, default[, componentflags])
+
+   Create a new directory in the Directory table. There is a current
+   component at each point in time for the directory, which is either
+   explicitly created through "start_component()", or implicitly when
+   files are added for the first time. Files are added into the
+   current component, and into the cab file.  To create a directory, a
+   base directory object needs to be specified (can be "None"), the
+   path to the physical directory, and a logical directory name.
+   *default* specifies the DefaultDir slot in the directory table.
+   *componentflags* specifies the default flags that new components
+   get.
+
+   start_component(component=None, feature=None, flags=None, keyfile=None, uuid=None)
+
+      Add an entry to the Component table, and make this component the
+      current component for this directory. If no component name is
+      given, the directory name is used. If no *feature* is given, the
+      current feature is used. If no *flags* are given, the
+      directory's default flags are used. If no *keyfile* is given,
+      the KeyPath is left null in the Component table.
+
+   add_file(file, src=None, version=None, language=None)
+
+      Add a file to the current component of the directory, starting a
+      new one if there is no current component. By default, the file
+      name in the source and the file table will be identical. If the
+      *src* file is specified, it is interpreted relative to the
+      current directory. Optionally, a *version* and a *language* can
+      be specified for the entry in the File table.
+
+   glob(pattern, exclude=None)
+
+      Add a list of files to the current component as specified in the
+      glob pattern.  Individual files can be excluded in the *exclude*
+      list.
+
+   remove_pyc()
+
+      Remove ".pyc" files on uninstall.
+
+参见: Directory Table File Table Component Table FeatureComponents Table
+
+
+相关特性
+========
+
+class msilib.Feature(db, id, title, desc, display, level=1, parent=None, directory=None, attributes=0)
+
+   Add a new record to the "Feature" table, using the values *id*,
+   *parent.id*, *title*, *desc*, *display*, *level*, *directory*, and
+   *attributes*. The resulting feature object can be passed to the
+   "start_component()" method of "Directory".
+
+   set_current()
+
+      Make this feature the current feature of "msilib". New
+      components are automatically added to the default feature,
+      unless a feature is explicitly specified.
+
+参见: Feature Table
+
+
+GUI classes
+===========
+
+"msilib" provides several classes that wrap the GUI tables in an MSI
+database. However, no standard user interface is provided; use
+"bdist_msi" to create MSI files with a user-interface for installing
+Python packages.
+
+class msilib.Control(dlg, name)
+
+   Base class of the dialog controls. *dlg* is the dialog object the
+   control belongs to, and *name* is the control's name.
+
+   event(event, argument, condition=1, ordering=None)
+
+      Make an entry into the "ControlEvent" table for this control.
+
+   mapping(event, attribute)
+
+      Make an entry into the "EventMapping" table for this control.
+
+   condition(action, condition)
+
+      Make an entry into the "ControlCondition" table for this
+      control.
+
+class msilib.RadioButtonGroup(dlg, name, property)
+
+   Create a radio button control named *name*. *property* is the
+   installer property that gets set when a radio button is selected.
+
+   add(name, x, y, width, height, text, value=None)
+
+      Add a radio button named *name* to the group, at the coordinates
+      *x*, *y*, *width*, *height*, and with the label *text*. If
+      *value* is "None", it defaults to *name*.
+
+class msilib.Dialog(db, name, x, y, w, h, attr, title, first, default, cancel)
+
+   Return a new "Dialog" object. An entry in the "Dialog" table is
+   made, with the specified coordinates, dialog attributes, title,
+   name of the first, default, and cancel controls.
+
+   control(name, type, x, y, width, height, attributes, property, text, control_next, help)
+
+      Return a new "Control" object. An entry in the "Control" table
+      is made with the specified parameters.
+
+      This is a generic method; for specific types, specialized
+      methods are provided.
+
+   text(name, x, y, width, height, attributes, text)
+
+      Add and return a "Text" control.
+
+   bitmap(name, x, y, width, height, text)
+
+      Add and return a "Bitmap" control.
+
+   line(name, x, y, width, height)
+
+      Add and return a "Line" control.
+
+   pushbutton(name, x, y, width, height, attributes, text, next_control)
+
+      Add and return a "PushButton" control.
+
+   radiogroup(name, x, y, width, height, attributes, property, text, next_control)
+
+      Add and return a "RadioButtonGroup" control.
+
+   checkbox(name, x, y, width, height, attributes, property, text, next_control)
+
+      Add and return a "CheckBox" control.
+
+参见:
+
+  Dialog Table Control Table Control Types ControlCondition Table
+  ControlEvent Table EventMapping Table RadioButton Table
+
+
+Precomputed tables
+==================
+
+"msilib" provides a few subpackages that contain only schema and table
+definitions. Currently, these definitions are based on MSI version
+2.0.
+
+msilib.schema
+
+   This is the standard MSI schema for MSI 2.0, with the *tables*
+   variable providing a list of table definitions, and
+   *_Validation_records* providing the data for MSI validation.
+
+msilib.sequence
+
+   此模块包含针对标准序列表的表内容: *AdminExecuteSequence*,
+   *AdminUISequence*, *AdvtExecuteSequence*, *InstallExecuteSequence*
+   和 *InstallUISequence*。
+
+msilib.text
+
+   此模块包含 UIText 和 ActionText 表的定义，用于标准安装器动作。

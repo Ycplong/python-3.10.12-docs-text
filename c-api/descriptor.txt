@@ -1,0 +1,33 @@
+描述符对象
+**********
+
+“描述符”是描述对象的某些属性的对象。它们存在于类型对象的字典中。
+
+PyTypeObject PyProperty_Type
+    * Part of the Stable ABI.*
+
+   内建描述符类型的类型对象。
+
+PyObject *PyDescr_NewGetSet(PyTypeObject *type, struct PyGetSetDef *getset)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+PyObject *PyDescr_NewMember(PyTypeObject *type, struct PyMemberDef *meth)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+PyObject *PyDescr_NewMethod(PyTypeObject *type, struct PyMethodDef *meth)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+PyObject *PyDescr_NewWrapper(PyTypeObject *type, struct wrapperbase *wrapper, void *wrapped)
+    *Return value: New reference.*
+
+PyObject *PyDescr_NewClassMethod(PyTypeObject *type, PyMethodDef *method)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+int PyDescr_IsData(PyObject *descr)
+
+   如果描述符对象 *descr* 描述的是一个数据属性则返回非零值，或者如果它
+   描述的是一个方法则返回 "0"。 *descr* 必须为一个描述符对象；不会进行
+   错误检测。
+
+PyObject *PyWrapper_New(PyObject*, PyObject*)
+    *Return value: New reference.** Part of the Stable ABI.*

@@ -1,0 +1,660 @@
+内存管理
+********
+
+
+概述
+====
+
+在 Python 中，内存管理涉及到一个包含所有 Python 对象和数据结构的私有堆
+（heap）。这个私有堆的管理由内部的 *Python 内存管理器（Python memory
+manager）* 保证。Python 内存管理器有不同的组件来处理各种动态存储管理方
+面的问题，如共享、分割、预分配或缓存。
+
+在最底层，一个原始内存分配器通过与操作系统的内存管理器交互，确保私有堆
+中有足够的空间来存储所有与 Python 相关的数据。在原始内存分配器的基础上
+，几个对象特定的分配器在同一堆上运行，并根据每种对象类型的特点实现不同
+的内存管理策略。例如，整数对象在堆内的管理方式不同于字符串、元组或字典
+，因为整数需要不同的存储需求和速度与空间的权衡。因此，Python 内存管理
+器将一些工作分配给对象特定分配器，但确保后者在私有堆的范围内运行。
+
+Python 堆内存的管理是由解释器来执行，用户对它没有控制权，即使他们经常
+操作指向堆内内存块的对象指针，理解这一点十分重要。Python 对象和其他内
+部缓冲区的堆空间分配是由 Python 内存管理器按需通过本文档中列出的
+Python/C API 函数进行的。
+
+为了避免内存破坏，扩展的作者永远不应该试图用 C 库函数导出的函数来对
+Python 对象进行操作，这些函数包括： "malloc()", "calloc()",
+"realloc()" 和 "free()"。这将导致 C 分配器和 Python 内存管理器之间的混
+用，引发严重后果，这是由于它们实现了不同的算法，并在不同的堆上操作。但
+是，我们可以安全地使用 C 库分配器为单独的目的分配和释放内存块，如下例
+所示：
+
+   PyObject *res;
+   char *buf = (char *) malloc(BUFSIZ); /* for I/O */
+
+   if (buf == NULL)
+       return PyErr_NoMemory();
+   ...Do some I/O operation involving buf...
+   res = PyBytes_FromString(buf);
+   free(buf); /* malloc'ed */
+   return res;
+
+在这个例子中，I/O 缓冲区的内存请求是由 C 库分配器处理的。Python 内存管
+理器只参与了分配作为结果返回的字节对象。
+
+In most situations, however, it is recommended to allocate memory from
+the Python heap specifically because the latter is under control of
+the Python memory manager. For example, this is required when the
+interpreter is extended with new object types written in C. Another
+reason for using the Python heap is the desire to *inform* the Python
+memory manager about the memory needs of the extension module. Even
+when the requested memory is used exclusively for internal, highly
+specific purposes, delegating all memory requests to the Python memory
+manager causes the interpreter to have a more accurate image of its
+memory footprint as a whole. Consequently, under certain
+circumstances, the Python memory manager may or may not trigger
+appropriate actions, like garbage collection, memory compaction or
+other preventive procedures. Note that by using the C library
+allocator as shown in the previous example, the allocated memory for
+the I/O buffer escapes completely the Python memory manager.
+
+参见:
+
+  环境变量 "PYTHONMALLOC" 可被用来配置 Python 所使用的内存分配器。
+
+  环境变量 "PYTHONMALLOCSTATS" 可以用来在每次创建和关闭新的 pymalloc
+  对象区域时打印 pymalloc  内存分配器 的统计数据。
+
+
+分配器域
+========
+
+所有分配函数都属于三个不同的“分配器域”之一（见 "PyMemAllocatorDomain"
+）。这些域代表了不同的分配策略，并为不同目的进行了优化。每个域如何分配
+内存和每个域调用哪些内部函数的具体细节被认为是实现细节，但是出于调试目
+的，可以在 此处 找到一张简化的表格。没有硬性要求将属于给定域的分配函数
+返回的内存，仅用于该域提示的目的（虽然这是推荐的做法）。例如，你可以将
+"PyMem_RawMalloc()" 返回的内存用于分配 Python 对象，或者将
+"PyObject_Malloc()" 返回的内存用作缓冲区。
+
+三个分配域分别是：
+
+* 原始域：用于为通用内存缓冲区分配内存，分配*必须*转到系统分配器并且分
+  配器可以在没有 *GIL* 的情况下运行。内存直接请求自系统。
+
+* "Mem" 域：用于为 Python 缓冲区和通用内存缓冲区分配内存，分配时必须持
+  有 *GIL*。内存取自于 Python 私有堆。
+
+* 对象域：用于分配属于 Python 对象的内存。内存取自于 Python 私有堆。
+
+当释放属于给定域的分配函数先前分配的内存时，必须使用对应的释放函数。例
+如，"PyMem_Free()" 来释放 "PyMem_Malloc()" 分配的内存。
+
+
+原始内存接口
+============
+
+以下函数集封装了系统分配器。这些函数是线程安全的，不需要持有 *全局解释
+器锁*。
+
+default raw memory allocator 使用这些函数："malloc()"、 "calloc()"、
+"realloc()" 和 "free()"；申请零字节时则调用 "malloc(1)" （或
+"calloc(1, 1)"）
+
+3.4 新版功能.
+
+void *PyMem_RawMalloc(size_t n)
+
+   Allocates *n* bytes and returns a pointer of type "void*" to the
+   allocated memory, or "NULL" if the request fails.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyMem_RawMalloc(1)" 一样。但是内存不会以任何方式被初始化。
+
+void *PyMem_RawCalloc(size_t nelem, size_t elsize)
+
+   Allocates *nelem* elements each whose size in bytes is *elsize* and
+   returns a pointer of type "void*" to the allocated memory, or
+   "NULL" if the request fails. The memory is initialized to zeros.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyMem_RawCalloc(1, 1)" 一样。
+
+   3.5 新版功能.
+
+void *PyMem_RawRealloc(void *p, size_t n)
+
+   将 *p* 指向的内存块大小调整为 *n* 字节。以新旧内存块大小中的最小值
+   为准，其中内容保持不变，
+
+   如果 *p* 是 "NULL" ，则相当于调用 "PyMem_RawMalloc(n)" ；如果 *n*
+   等于 0，则内存块大小会被调整，但不会被释放，返回非 "NULL" 指针。
+
+   除非 *p* 是 "NULL" ，否则它必须是之前调用 "PyMem_RawMalloc()" 、
+   "PyMem_RawRealloc()" 或 "PyMem_RawCalloc()" 所返回的。
+
+   如果请求失败，"PyMem_RawRealloc()" 返回 "NULL" ， *p* 仍然是指向先
+   前内存区域的有效指针。
+
+void PyMem_RawFree(void *p)
+
+   释放 *p* 指向的内存块。 *p* 必须是之前调用 "PyMem_RawMalloc()" 、
+   "PyMem_RawRealloc()" 或 "PyMem_RawCalloc()" 所返回的指针。否则，或
+   在 "PyMem_RawFree(p)" 之前已经调用过的情况下，未定义的行为会发生。
+
+   如果 *p* 是 "NULL", 那么什么操作也不会进行。
+
+
+内存接口
+========
+
+以下函数集，仿照 ANSI C 标准，并指定了请求零字节时的行为，可用于从
+Python堆分配和释放内存。
+
+默认内存分配器 使用了 pymalloc 内存分配器.
+
+警告:
+
+  在使用这些函数时，必须持有 *全局解释器锁（GIL）* 。
+
+在 3.6 版更改: 现在默认的分配器是 pymalloc 而非系统的 "malloc()" 。
+
+void *PyMem_Malloc(size_t n)
+    * Part of the Stable ABI.*
+
+   Allocates *n* bytes and returns a pointer of type "void*" to the
+   allocated memory, or "NULL" if the request fails.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyMem_Malloc(1)" 一样。但是内存不会以任何方式被初始化。
+
+void *PyMem_Calloc(size_t nelem, size_t elsize)
+    * Part of the Stable ABI since version 3.7.*
+
+   Allocates *nelem* elements each whose size in bytes is *elsize* and
+   returns a pointer of type "void*" to the allocated memory, or
+   "NULL" if the request fails. The memory is initialized to zeros.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyMem_Calloc(1, 1)" 一样。
+
+   3.5 新版功能.
+
+void *PyMem_Realloc(void *p, size_t n)
+    * Part of the Stable ABI.*
+
+   将 *p* 指向的内存块大小调整为 *n* 字节。以新旧内存块大小中的最小值
+   为准，其中内容保持不变，
+
+   如果 *p* 是 "NULL" ，则相当于调用 "PyMem_Malloc(n)" ；如果 *n* 等于
+   0，则内存块大小会被调整，但不会被释放，返回非 "NULL" 指针。
+
+   除非 *p* 是 "NULL" ，否则它必须是之前调用 "PyMem_Malloc()" 、
+   "PyMem_Realloc()" 或 "PyMem_Calloc()" 所返回的。
+
+   如果请求失败，"PyMem_Realloc()" 返回 "NULL" ， *p* 仍然是指向先前内
+   存区域的有效指针。
+
+void PyMem_Free(void *p)
+    * Part of the Stable ABI.*
+
+   释放 *p* 指向的内存块。 *p* 必须是之前调用 "PyMem_Malloc()" 、
+   "PyMem_Realloc()" 或 "PyMem_Calloc()" 所返回的指针。否则，或在
+   "PyMem_Free(p)" 之前已经调用过的情况下，未定义的行为会发生。
+
+   如果 *p* 是 "NULL", 那么什么操作也不会进行。
+
+以下面向类型的宏为方便而提供。 注意 *TYPE* 可以指任何 C 类型。
+
+TYPE *PyMem_New(TYPE, size_t n)
+
+   Same as "PyMem_Malloc()", but allocates "(n * sizeof(TYPE))" bytes
+   of memory.  Returns a pointer cast to "TYPE*".  The memory will not
+   have been initialized in any way.
+
+TYPE *PyMem_Resize(void *p, TYPE, size_t n)
+
+   Same as "PyMem_Realloc()", but the memory block is resized to "(n *
+   sizeof(TYPE))" bytes.  Returns a pointer cast to "TYPE*". On
+   return, *p* will be a pointer to the new memory area, or "NULL" in
+   the event of failure.
+
+   这是一个 C 预处理宏， *p* 总是被重新赋值。请保存 *p* 的原始值，以避
+   免在处理错误时丢失内存。
+
+void PyMem_Del(void *p)
+
+   与 "PyMem_Free()" 相同
+
+此外，我们还提供了以下宏集用于直接调用 Python 内存分配器，而不涉及上面
+列出的 C API 函数。但是请注意，使用它们并不能保证跨 Python 版本的二进
+制兼容性，因此在扩展模块被弃用。
+
+* "PyMem_MALLOC(size)"
+
+* "PyMem_NEW(type, size)"
+
+* "PyMem_REALLOC(ptr, size)"
+
+* "PyMem_RESIZE(ptr, type, size)"
+
+* "PyMem_FREE(ptr)"
+
+* "PyMem_DEL(ptr)"
+
+
+对象分配器
+==========
+
+以下函数集，仿照 ANSI C 标准，并指定了请求零字节时的行为，可用于从
+Python堆分配和释放内存。
+
+注解:
+
+  当通过 自定义内存分配器 部分描述的方法拦截该域中的分配函数时，无法保
+  证这些分配器返回的内存可以被成功地转换成 Python 对象。
+
+默认对象分配器 使用 pymalloc 内存分配器.
+
+警告:
+
+  在使用这些函数时，必须持有 *全局解释器锁（GIL）* 。
+
+void *PyObject_Malloc(size_t n)
+    * Part of the Stable ABI.*
+
+   Allocates *n* bytes and returns a pointer of type "void*" to the
+   allocated memory, or "NULL" if the request fails.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyObject_Malloc(1)" 一样。但是内存不会以任何方式被初始化。
+
+void *PyObject_Calloc(size_t nelem, size_t elsize)
+    * Part of the Stable ABI since version 3.7.*
+
+   Allocates *nelem* elements each whose size in bytes is *elsize* and
+   returns a pointer of type "void*" to the allocated memory, or
+   "NULL" if the request fails. The memory is initialized to zeros.
+
+   请求零字节可能返回一个独特的非 "NULL" 指针，就像调用了
+   "PyObject_Calloc(1, 1)" 一样。
+
+   3.5 新版功能.
+
+void *PyObject_Realloc(void *p, size_t n)
+    * Part of the Stable ABI.*
+
+   将 *p* 指向的内存块大小调整为 *n* 字节。以新旧内存块大小中的最小值
+   为准，其中内容保持不变，
+
+   如果*p*是``NULL``，则相当于调用 "PyObject_Malloc(n)" ；如果 *n* 等
+   于 0，则内存块大小会被调整，但不会被释放，返回非 "NULL" 指针。
+
+   除非 *p* 是 "NULL" ，否则它必须是之前调用 "PyObject_Malloc()" 、
+   "PyObject_Realloc()" 或 "PyObject_Calloc()" 所返回的。
+
+   如果请求失败，"PyObject_Realloc()" 返回 "NULL" ， *p* 仍然是指向先
+   前内存区域的有效指针。
+
+void PyObject_Free(void *p)
+    * Part of the Stable ABI.*
+
+   释放 *p* 指向的内存块。 *p* 必须是之前调用 "PyObject_Malloc()" 、
+   "PyObject_Realloc()" 或 "PyObject_Calloc()" 所返回的指针。否则，或
+   在 "PyObject_Free(p)" 之前已经调用过的情况下，未定义行为会发生。
+
+   如果 *p* 是 "NULL", 那么什么操作也不会进行。
+
+
+默认内存分配器
+==============
+
+默认内存分配器：
+
++---------------------------------+----------------------+--------------------+-----------------------+----------------------+
+| 配置                            | 名称                 | PyMem_RawMalloc    | PyMem_Malloc          | PyObject_Malloc      |
+|=================================|======================|====================|=======================|======================|
+| 发布版本                        | ""pymalloc""         | "malloc"           | "pymalloc"            | "pymalloc"           |
++---------------------------------+----------------------+--------------------+-----------------------+----------------------+
+| 调试构建                        | ""pymalloc_debug""   | "malloc" + debug   | "pymalloc" + debug    | "pymalloc" + debug   |
++---------------------------------+----------------------+--------------------+-----------------------+----------------------+
+| 没有 pymalloc 的发布版本        | ""malloc""           | "malloc"           | "malloc"              | "malloc"             |
++---------------------------------+----------------------+--------------------+-----------------------+----------------------+
+| 没有 pymalloc 的调试构建        | ""malloc_debug""     | "malloc" + debug   | "malloc" + debug      | "malloc" + debug     |
++---------------------------------+----------------------+--------------------+-----------------------+----------------------+
+
+说明：
+
+* 名称："PYTHONMALLOC" 环境变量的值。
+
+* "malloc"：来自 C 标准库的系统分配器，C 函数："malloc()"、"calloc()"
+  、"realloc()" 和 "free()"。
+
+* "pymalloc"：pymalloc 内存分配器.
+
+* "+ debug": 附带 Python 内存分配器的调试钩子.
+
+* “调试构建”：调试模式下的 Python 构建。
+
+
+自定义内存分配器
+================
+
+3.4 新版功能.
+
+type PyMemAllocatorEx
+
+   用于描述内存块分配器的结构体。 该结构体下列字段:
+
+   +------------------------------------------------------------+-----------------------------------------+
+   | 域                                                         | 含意                                    |
+   |============================================================|=========================================|
+   | "void *ctx"                                                | 作为第一个参数传入的用户上下文          |
+   +------------------------------------------------------------+-----------------------------------------+
+   | "void* malloc(void *ctx, size_t size)"                     | 分配一个内存块                          |
+   +------------------------------------------------------------+-----------------------------------------+
+   | "void* calloc(void *ctx, size_t nelem, size_t elsize)"     | 分配一个初始化为 0 的内存块             |
+   +------------------------------------------------------------+-----------------------------------------+
+   | "void* realloc(void *ctx, void *ptr, size_t new_size)"     | 分配一个内存块或调整其大小              |
+   +------------------------------------------------------------+-----------------------------------------+
+   | "void free(void *ctx, void *ptr)"                          | 释放一个内存块                          |
+   +------------------------------------------------------------+-----------------------------------------+
+
+   在 3.5 版更改: The "PyMemAllocator" structure was renamed to
+   "PyMemAllocatorEx" and a new "calloc" field was added.
+
+type PyMemAllocatorDomain
+
+   用来识别分配器域的枚举类。域有：
+
+   PYMEM_DOMAIN_RAW
+
+      函数
+
+      * "PyMem_RawMalloc()"
+
+      * "PyMem_RawRealloc()"
+
+      * "PyMem_RawCalloc()"
+
+      * "PyMem_RawFree()"
+
+   PYMEM_DOMAIN_MEM
+
+      函数
+
+      * "PyMem_Malloc()",
+
+      * "PyMem_Realloc()"
+
+      * "PyMem_Calloc()"
+
+      * "PyMem_Free()"
+
+   PYMEM_DOMAIN_OBJ
+
+      函数
+
+      * "PyObject_Malloc()"
+
+      * "PyObject_Realloc()"
+
+      * "PyObject_Calloc()"
+
+      * "PyObject_Free()"
+
+void PyMem_GetAllocator(PyMemAllocatorDomain domain, PyMemAllocatorEx *allocator)
+
+   获取指定域的内存块分配器。
+
+void PyMem_SetAllocator(PyMemAllocatorDomain domain, PyMemAllocatorEx *allocator)
+
+   设置指定域的内存块分配器。
+
+   当请求零字节时，新的分配器必须返回一个独特的非 "NULL" 指针。
+
+   对于 "PYMEM_DOMAIN_RAW" 域，分配器必须是线程安全的：当分配器被调用
+   时，不持有 *全局解释器锁* 。
+
+   如果新的分配器不是钩子（不调用之前的分配器），必须调用
+   "PyMem_SetupDebugHooks()" 函数在新分配器上重新安装调试钩子。
+
+   警告:
+
+     "PyMem_SetAllocator()" does have the following contract:
+
+        * It can be called after "Py_PreInitialize()" and before
+          "Py_InitializeFromConfig()" to install a custom memory
+          allocator. There are no restrictions over the installed
+          allocator other than the ones imposed by the domain (for
+          instance, the Raw Domain allows the allocator to be called
+          without the GIL held). See the section on allocator domains
+          for more information.
+
+        * If called after Python has finish initializing (after
+          "Py_InitializeFromConfig()" has been called) the allocator
+          **must** wrap the existing allocator. Substituting the
+          current allocator for some other arbitrary one is **not
+          supported**.
+
+void PyMem_SetupDebugHooks(void)
+
+   设置 Python 内存分配器的调试钩子 以检测内存错误。
+
+
+Python 内存分配器的调试钩子
+===========================
+
+当 Python 在调试模式下构建，"PyMem_SetupDebugHooks()" 函数在 Python 预
+初始化 时被调用，以在 Python 内存分配器上设置调试钩子以检测内存错误。
+
+"PYTHONMALLOC" 环境变量可被用于在以发行模式下编译的 Python 上安装调试
+钩子（例如："PYTHONMALLOC=debug"）。
+
+"PyMem_SetupDebugHooks()" 函数可被用于在调用了 "PyMem_SetAllocator()"
+之后设置调试钩子。
+
+这些调试钩子用特殊的、可辨认的位模式填充动态分配的内存块。新分配的内存
+用字节 "0xCD``（``PYMEM_CLEANBYTE"）填充，释放的内存用字节 "0xDD``（
+``PYMEM_DEADBYTE"）填充。内存块被填充了字节 "0xFD``（
+``PYMEM_FORBIDDENBYTE"）的“禁止字节”包围。这些字节串不太可能是合法的地
+址、浮点数或ASCII字符串
+
+运行时检查：
+
+* 检测对 API 的违反。例如：检测对 "PyMem_Malloc()" 分配的内存块调用
+  "PyObject_Free()"。
+
+* 检测缓冲区起始位置前的写入（缓冲区下溢）。
+
+* 检测缓冲区终止位置后的写入（缓冲区溢出）。
+
+* 检测当调用 "PYMEM_DOMAIN_OBJ" (如: "PyObject_Malloc()") 和
+  "PYMEM_DOMAIN_MEM" (如: "PyMem_Malloc()") 域的分配器函数时 *GIL* 已
+  被持有。
+
+在出错时，调试钩子使用 "tracemalloc" 模块来回溯内存块被分配的位置。只
+有当 "tracemalloc" 正在追踪 Python 内存分配，并且内存块被追踪时，才会
+显示回溯。
+
+让 *S* = "sizeof(size_t)"。 将 "2*S" 个字节添加到每个被请求的 *N* 字节
+数据块的两端。 内存的布局像是这样，其中 p 代表由类似 malloc 或类似
+realloc 的函数所返回的地址 ("p[i:j]" 表示从 "*(p+i)" 左侧开始到
+"*(p+j)" 左侧止的字节数据切片；请注意对负索引号的处理与 Python 切片是
+不同的）:
+
+"p[-2*S:-S]"
+   最初所要求的字节数。 这是一个 size_t，为大端序（易于在内存转储中读
+   取）。
+
+"p[-S]"
+   API 标识符（ASCII 字符）:
+
+   * "'r'" 表示 "PYMEM_DOMAIN_RAW"。
+
+   * "'m'" 表示 "PYMEM_DOMAIN_MEM"。
+
+   * "'o'" 表示 "PYMEM_DOMAIN_OBJ"。
+
+"p[-S+1:0]"
+   PYMEM_FORBIDDENBYTE 的副本。 用于捕获下层的写入和读取。
+
+"p[0:N]"
+   所请求的内存，用 PYMEM_CLEANBYTE 的副本填充，用于捕获对未初始化内存
+   的引用。 当调用 realloc 之类的函数来请求更大的内存块时，额外新增的
+   字节也会用 PYMEM_CLEANBYTE 来填充。 当调用 free 之类的函数时，这些
+   字节会用 PYMEM_DEADBYTE 来重写，以捕获对已释放内存的引用。 当调用
+   realloc 之类的函数来请求更小的内存块时，多余的旧字节也会用
+   PYMEM_DEADBYTE 来填充。
+
+"p[N:N+S]"
+   PYMEM_FORBIDDENBYTE 的副本。 用于捕获超限的写入和读取。
+
+"p[N+S:N+2*S]"
+   仅当定义了 "PYMEM_DEBUG_SERIALNO" 宏时会被使用（默认情况下将不定义
+   ）。
+
+   一个序列号，每次调用 malloc 之类或 realloc 之类的函数时自增 1。 大
+   端序的 "size_t"。 如果之后检测到了“被破坏的内存”，此序列号提供了一
+   个很好的手段用来在下次运行时设置中断点，以捕获该内存块被破坏的瞬间
+   。 obmalloc.c 中的静态函数 bumpserialno() 是此序列号会发生自增的唯
+   一地方，它的存在使你可以方便地设置这样的中断点。
+
+一个 realloc 之类或 free 之类的函数会先检查两端的 PYMEM_FORBIDDENBYTE
+字节是否完好。 如果它们被改变了，则会将诊断输出写入到 stderr，并且程序
+将通过 Py_FatalError() 中止。 另一种主要的失败模式是当程序读到某种特殊
+的比特模式并试图将其用作地址时触发内存错误。 如果你随即进入调试器并查
+看该对象，你很可能会看到它已完全被填充为 PYMEM_DEADBYTE (意味着已释放
+的内存被使用) 或 PYMEM_CLEANBYTE (意味着未初始货摊内存被使用)。
+
+在 3.6 版更改: "PyMem_SetupDebugHooks()" 函数现在也能在使用发布模式编
+译的 Python 上工作。 当发生错误时，调试钩子现在会使用 "tracemalloc" 来
+获取已分配内存块的回溯信息。 调试钩子现在还会在 "PYMEM_DOMAIN_OBJ" 和
+"PYMEM_DOMAIN_MEM" 作用域的函数被调用时检查是否持有 GIL。
+
+在 3.8 版更改: 字节模式 "0xCB" ("PYMEM_CLEANBYTE")、 "0xDB"
+("PYMEM_DEADBYTE") 和 "0xFB" ("PYMEM_FORBIDDENBYTE") 已被 "0xCD" 、
+"0xDD" 和 "0xFD" 替代以使用与 Windows CRT 调试 "malloc()" 和 "free()"
+相同的值。
+
+
+pymalloc 分配器
+===============
+
+Python 有为具有短生命周期的小对象（小于或等于 512 字节）优化的
+*pymalloc* 分配器。它使用固定大小为 256 KiB 的称为 "arenas" 的内存映射
+。对于大于512字节的分配，它回到使用 "PyMem_RawMalloc()" 和
+"PyMem_RawRealloc()" 。
+
+*pymalloc* 是 "PYMEM_DOMAIN_MEM" (例如: "PyMem_Malloc()") 和
+"PYMEM_DOMAIN_OBJ" (例如: "PyObject_Malloc()") 域的 默认分配器 。
+
+arena 分配器使用以下函数：
+
+* Windows 上的 "VirtualAlloc()" 和 "VirtualFree()" ,
+
+* "mmap()" 和 "munmap()" ，如果可用，
+
+* 否则， "malloc()" 和 "free()" 。
+
+如果 Python 配置了 "--without-pymalloc" 选项，那么此分配器将被禁用。也
+可以在运行时使用 "PYTHONMALLOC`（例如：``PYTHONMALLOC=malloc`"）环境变
+量来禁用它。
+
+
+自定义 pymalloc Arena 分配器
+----------------------------
+
+3.4 新版功能.
+
+type PyObjectArenaAllocator
+
+   用来描述一个 arena 分配器的结构体。这个结构体有三个字段：
+
+   +----------------------------------------------------+-----------------------------------------+
+   | 域                                                 | 含意                                    |
+   |====================================================|=========================================|
+   | "void *ctx"                                        | 作为第一个参数传入的用户上下文          |
+   +----------------------------------------------------+-----------------------------------------+
+   | "void* alloc(void *ctx, size_t size)"              | 分配一块 size 字节的区域                |
+   +----------------------------------------------------+-----------------------------------------+
+   | "void free(void *ctx, void *ptr, size_t size)"     | 释放一块区域                            |
+   +----------------------------------------------------+-----------------------------------------+
+
+void PyObject_GetArenaAllocator(PyObjectArenaAllocator *allocator)
+
+   获取 arena 分配器
+
+void PyObject_SetArenaAllocator(PyObjectArenaAllocator *allocator)
+
+   设置 arena 分配器
+
+
+tracemalloc C API
+=================
+
+3.7 新版功能.
+
+int PyTraceMalloc_Track(unsigned int domain, uintptr_t ptr, size_t size)
+
+   在 "tracemalloc" 模块中跟踪一个已分配的内存块。
+
+   成功时返回 "0"，出错时返回 "-1" (无法分配内存来保存跟踪信息)。 如果
+   禁用了 tracemalloc 则返回 "-2"。
+
+   如果内存块已被跟踪，则更新现有跟踪信息。
+
+int PyTraceMalloc_Untrack(unsigned int domain, uintptr_t ptr)
+
+   在 "tracemalloc" 模块中取消跟踪一个已分配的内存块。 如果内存块未被
+   跟踪则不执行任何操作。
+
+   如果 tracemalloc 被禁用则返回 "-2"，否则返回 "0"。
+
+
+例子
+====
+
+以下是来自 概述 小节的示例，经过重写以使 I/O 缓冲区是通过使用第一个函
+数集从 Python 堆中分配的:
+
+   PyObject *res;
+   char *buf = (char *) PyMem_Malloc(BUFSIZ); /* for I/O */
+
+   if (buf == NULL)
+       return PyErr_NoMemory();
+   /* ...Do some I/O operation involving buf... */
+   res = PyBytes_FromString(buf);
+   PyMem_Free(buf); /* allocated with PyMem_Malloc */
+   return res;
+
+使用面向类型函数集的相同代码:
+
+   PyObject *res;
+   char *buf = PyMem_New(char, BUFSIZ); /* for I/O */
+
+   if (buf == NULL)
+       return PyErr_NoMemory();
+   /* ...Do some I/O operation involving buf... */
+   res = PyBytes_FromString(buf);
+   PyMem_Del(buf); /* allocated with PyMem_New */
+   return res;
+
+请注意在以上两个示例中，缓冲区总是通过归属于相同集的函数来操纵的。 事
+实上，对于一个给定的内存块必须使用相同的内存 API 族，以便使得混合不同
+分配器的风险减至最低。 以下代码序列包含两处错误，其中一个被标记为
+*fatal* 因为它混合了两种在不同堆上操作的不同分配器。
+
+   char *buf1 = PyMem_New(char, BUFSIZ);
+   char *buf2 = (char *) malloc(BUFSIZ);
+   char *buf3 = (char *) PyMem_Malloc(BUFSIZ);
+   ...
+   PyMem_Del(buf3);  /* Wrong -- should be PyMem_Free() */
+   free(buf2);       /* Right -- allocated via malloc() */
+   free(buf1);       /* Fatal -- should be PyMem_Del()  */
+
+除了旨在处理来自 Python 堆的原始内存块的函数之外， Python 中的对象是通
+过 "PyObject_New()", "PyObject_NewVar()" 和 "PyObject_Del()" 来分配和
+释放的。
+
+这些将在有关如何在 C 中定义和实现新对象类型的下一章中讲解。

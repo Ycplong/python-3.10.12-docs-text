@@ -1,0 +1,263 @@
+类型对象
+********
+
+type PyTypeObject
+    * Part of the Limited API (as an opaque struct).*
+
+   对象的 C 结构用于描述 built-in 类型。
+
+PyTypeObject PyType_Type
+    * Part of the Stable ABI.*
+
+   这是属于 type 对象的 type object，它在 Python 层面和 "type" 是相同
+   的对象。
+
+int PyType_Check(PyObject *o)
+
+   如果对象 *o* 是一个类型对象，包括派生自标准类型对象的类型实例则返回
+   非零值。 在所有其它情况下都返回 0。 此函数将总是成功执行。
+
+int PyType_CheckExact(PyObject *o)
+
+   如果对象 *o* 是一个类型对象，但不是标准类型对象的子类型则返回非零值
+   。 在所有其它情况下都返回 0。 此函数将总是成功执行。
+
+unsigned int PyType_ClearCache()
+    * Part of the Stable ABI.*
+
+   清空内部查找缓存。 返回当前版本标签。
+
+unsigned long PyType_GetFlags(PyTypeObject *type)
+    * Part of the Stable ABI.*
+
+   Return the "tp_flags" member of *type*. This function is primarily
+   meant for use with "Py_LIMITED_API"; the individual flag bits are
+   guaranteed to be stable across Python releases, but access to
+   "tp_flags" itself is not part of the limited API.
+
+   3.2 新版功能.
+
+   在 3.4 版更改: 返回类型现在是 "unsigned long" 而不是 "long"。
+
+void PyType_Modified(PyTypeObject *type)
+    * Part of the Stable ABI.*
+
+   使该类型及其所有子类型的内部查找缓存失效。 此函数必须在对该类型的属
+   性或基类进行任何手动修改之后调用。
+
+int PyType_HasFeature(PyTypeObject *o, int feature)
+
+   如果类型对象 *o* 设置了特性 *feature* 则返回非零值。 类型特性是用单
+   个比特位旗标来表示的。
+
+int PyType_IS_GC(PyTypeObject *o)
+
+   如果类型对象包括对循环检测器的支持则返回真值；这会测试类型旗标
+   "Py_TPFLAGS_HAVE_GC"。
+
+int PyType_IsSubtype(PyTypeObject *a, PyTypeObject *b)
+    * Part of the Stable ABI.*
+
+   如果 *a* 是 *b* 的子类型则返回真值。
+
+   此函数只检查实际的子类型，这意味着 "__subclasscheck__()" 不会在 *b*
+   上被调用。 请调用 "PyObject_IsSubclass()" 来执行与 "issubclass()"
+   所做的相同检查。
+
+PyObject *PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   类型对象的 "tp_alloc" 槽位的通用处理句柄。 请使用 Python 的默认内存
+   分配机制来分配一个新的实例并将其所有内容初始化为 "NULL"。
+
+PyObject *PyType_GenericNew(PyTypeObject *type, PyObject *args, PyObject *kwds)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   类型对象的 "tp_new" 槽位的通用处理句柄。 请使用类型的 "tp_alloc" 槽
+   位来创建一个新的实例。
+
+int PyType_Ready(PyTypeObject *type)
+    * Part of the Stable ABI.*
+
+   最终化一个类型对象。 这应当在所有类型对象上调用以完成它们的初始化。
+   此函数会负责从一个类型的基类添加被继承的槽位。 成功时返回 "0"，或是
+   在出错时返回 "-1" 并设置一个异常。
+
+   注解:
+
+     如果某些基类实现了 GC 协议并且所提供的类型的旗标中未包括
+     "Py_TPFLAGS_HAVE_GC"，则将自动从其父类实现 GC 协议。 相反地，如果
+     被创建的类型的旗标中未包括 "Py_TPFLAGS_HAVE_GC" 则它 **必须** 自
+     己通过实现 "tp_traverse" 句柄来实现 GC 协议。
+
+void *PyType_GetSlot(PyTypeObject *type, int slot)
+    * Part of the Stable ABI since version 3.4.*
+
+   返回存储在给定槽位中的函数指针。 如果结果为 "NULL"，则表示或者该槽
+   位为 "NULL"，或者该函数调用传入了无效的形参。 调用方通常要将结果指
+   针转换到适当的函数类型。
+
+   请参阅 "PyType_Slot.slot" 查看可用的 *slot* 参数值。
+
+   3.4 新版功能.
+
+   在 3.10 版更改: "PyType_GetSlot()" 现在可以接受所有类型。 在此之前
+   ，它被限制为 堆类型。
+
+PyObject *PyType_GetModule(PyTypeObject *type)
+    * Part of the Stable ABI since version 3.10.*
+
+   返回当使用 "PyType_FromModuleAndSpec()" 创建类型时关联到给定类型的
+   模块对象。
+
+   如果没有关联到给定类型的模块，则设置 "TypeError" 并返回 "NULL"。
+
+   此函数通常被用于获取方法定义所在的模块。 请注意在这样的方法中，
+   "PyType_GetModule(Py_TYPE(self))" 可能不会返回预期的结果。
+   "Py_TYPE(self)" 可以是目标类的一个 *子类*，而子类并不一定是在与其上
+   级类相同的模块中定义的。 请参阅 "PyCMethod" 了解如何获取方法定义所
+   在的类。
+
+   3.9 新版功能.
+
+void *PyType_GetModuleState(PyTypeObject *type)
+    * Part of the Stable ABI since version 3.10.*
+
+   返回关联到给定类型的模块对象的状态。 这是一个在
+   "PyType_GetModule()" 的结果上调用 "PyModule_GetState()" 的快捷方式
+   。
+
+   如果没有关联到给定类型的模块，则设置 "TypeError" 并返回 "NULL"。
+
+   如果 *type* 有关联的模块但其状态为 "NULL"，则返回 "NULL" 且不设置异
+   常。
+
+   3.9 新版功能.
+
+
+创建堆分配类型
+==============
+
+下列函数和结构体可被用来创建 堆类型。
+
+PyObject *PyType_FromModuleAndSpec(PyObject *module, PyType_Spec *spec, PyObject *bases)
+    *Return value: New reference.** Part of the Stable ABI since
+   version 3.10.*
+
+   根据 *spec* ("Py_TPFLAGS_HEAPTYPE") 创建并返回一个 堆类型。
+
+   *bases* 参数可被用来指定基类；它可以是单个类或由多个类组成的元组。
+   如果 *bases* 为 "NULL"，则会改用 *Py_tp_bases* 槽位。 如果该槽位也
+   为 "NULL"，则会改用 *Py_tp_base* 槽位。 如果该槽位同样为 "NULL"，则
+   新类型将派生自 "object"。
+
+   *module* 参数可被用来记录新类定义所在的模块。 它必须是一个模块对象
+   或为 "NULL"。 如果不为 "NULL"，则该模块会被关联到新类型并且可在之后
+   通过 "PyType_GetModule()" 来获取。 这个关联模块不可被子类继承；它必
+   须为每个类单独指定。
+
+   此函数会在新类型上调用 "PyType_Ready()"。
+
+   3.9 新版功能.
+
+   在 3.10 版更改: 此函数现在接受一个单独类作为 *bases* 参数并接受
+   "NULL" 作为 "tp_doc" 槽位。
+
+PyObject *PyType_FromSpecWithBases(PyType_Spec *spec, PyObject *bases)
+    *Return value: New reference.** Part of the Stable ABI since
+   version 3.3.*
+
+   等价于 "PyType_FromModuleAndSpec(NULL, spec, bases)"。
+
+   3.3 新版功能.
+
+PyObject *PyType_FromSpec(PyType_Spec *spec)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   等价于 "PyType_FromSpecWithBases(spec, NULL)"。
+
+type PyType_Spec
+    * Part of the Stable ABI (including all members).*
+
+   定义一个类型的行为的结构体。
+
+   const char *PyType_Spec.name
+
+      类型的名称，用来设置 "PyTypeObject.tp_name"。
+
+   int PyType_Spec.basicsize
+
+   int PyType_Spec.itemsize
+
+      以字节数表示的实例大小，用来设置 "PyTypeObject.tp_basicsize" 和
+      "PyTypeObject.tp_itemsize"。
+
+   int PyType_Spec.flags
+
+      类型旗标，用来设置 "PyTypeObject.tp_flags"。
+
+      如果未设置 "Py_TPFLAGS_HEAPTYPE" 旗标，则
+      "PyType_FromSpecWithBases()" 会自动设置它。
+
+   PyType_Slot *PyType_Spec.slots
+
+      "PyType_Slot" 结构体的数组。 以特殊槽位值 "{0, NULL}" 来结束。
+
+type PyType_Slot
+    * Part of the Stable ABI (including all members).*
+
+   定义一个类型的可选功能的结构体，包含一个槽位 ID 和一个值指针。
+
+   int PyType_Slot.slot
+
+         槽位 ID。
+
+         槽位 ID 的类名像是结构体 "PyTypeObject", "PyNumberMethods",
+         "PySequenceMethods", "PyMappingMethods" 和 "PyAsyncMethods"
+         的字段名附加一个 "Py_" 前缀。 举例来说，使用:
+
+         * "Py_tp_dealloc" 设置 "PyTypeObject.tp_dealloc"
+
+         * "Py_nb_add" 设置 "PyNumberMethods.nb_add"
+
+         * "Py_sq_length" 设置 "PySequenceMethods.sq_length"
+
+         下列字段完全无法使得 "PyType_Spec" 和 "PyType_Slot" 来设置:
+
+         * "tp_dict"
+
+         * "tp_mro"
+
+         * "tp_cache"
+
+         * "tp_subclasses"
+
+         * "tp_weaklist"
+
+         * "tp_vectorcall"
+
+         * "tp_weaklistoffset" (参见 PyMemberDef)
+
+         * "tp_dictoffset" (参见 PyMemberDef)
+
+         * "tp_vectorcall_offset" (参见 PyMemberDef)
+
+         下列字段在受限 API 下无法使用 "PyType_Spec" 和 "PyType_Slot"
+         来设置:
+
+         * "bf_getbuffer"
+
+         * "bf_releasebuffer"
+
+         设置 "Py_tp_bases" 或 "Py_tp_base" 在某些平台上可能会有问题。
+         为了避免问题，请改用 "PyType_FromSpecWithBases()" 的 *bases*
+         参数。
+
+      在 3.9 版更改: "PyBufferProcs" 中的槽位可能会在不受限 API 中被设
+      置。
+
+   void *PyType_Slot.pfunc
+
+      该槽位的预期值。 在大多数情况下，这将是一个指向函数的指针。
+
+      "Py_tp_doc" 以外的槽位均不可为 "NULL"。

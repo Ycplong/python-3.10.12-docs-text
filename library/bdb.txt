@@ -1,0 +1,420 @@
+"bdb" --- 调试器框架
+********************
+
+**源代码:** Lib/bdb.py
+
+======================================================================
+
+"bdb" 模块处理基本的调试器函数，例如设置中断点或通过调试器来管理执行。
+
+定义了以下异常：
+
+exception bdb.BdbQuit
+
+   由 "Bdb" 类引发用于退出调试器的异常。
+
+"bdb" 模块还定义了两个类:
+
+class bdb.Breakpoint(self, file, line, temporary=False, cond=None, funcname=None)
+
+   这个类实现了临时性中断点、忽略计数、禁用与（重新）启用，以及条件设
+   置等。
+
+   中断点通过一个名为 "bpbynumber" 的列表基于数字并通过 "bplist" 基于
+   "(file, line)" 对进行索引。 前者指向一个 "Breakpoint" 类的单独实例
+   。 后者指向一个由这种实例组成的列表，因为在每一行中可能存在多个中断
+   点。
+
+   When creating a breakpoint, its associated "file name" should be in
+   canonical form.  If a "funcname" is defined, a breakpoint "hit"
+   will be counted when the first line of that function is executed.
+   A "conditional" breakpoint always counts a "hit".
+
+   "Breakpoint" 的实例具有下列方法:
+
+   deleteMe()
+
+      从关联到文件/行的列表中删除此中断点。 如果它是该位置上的最后一个
+      中断点，还将删除相应的文件/行条目。
+
+   enable()
+
+      将此中断点标记为启用。
+
+   disable()
+
+      将此中断点标记为禁用。
+
+   bpformat()
+
+      返回一个带有关于此中断点的所有信息的，格式良好的字符串:
+
+      * Breakpoint number.
+
+      * Temporary status (del or keep).
+
+      * File/line position.
+
+      * Break condition.
+
+      * Number of times to ignore.
+
+      * Number of times hit.
+
+      3.2 新版功能.
+
+   bpprint(out=None)
+
+      将 "bpformat()" 的输出打印到文件 *out*，或者如果为 "None" 则打印
+      到标准输出。, to standard output.
+
+   "Breakpoint" instances have the following attributes:
+
+   file
+
+      File name of the "Breakpoint".
+
+   line
+
+      Line number of the "Breakpoint" within "file".
+
+   temporary
+
+      True if a "Breakpoint" at (file, line) is temporary.
+
+   cond
+
+      Condition for evaluating a "Breakpoint" at (file, line).
+
+   funcname
+
+      Function name that defines whether a "Breakpoint" is hit upon
+      entering the function.
+
+   enabled
+
+      True if "Breakpoint" is enabled.
+
+   bpbynumber
+
+      Numeric index for a single instance of a "Breakpoint".
+
+   bplist
+
+      Dictionary of "Breakpoint" instances indexed by ("file", "line")
+      tuples.
+
+   ignore
+
+      Number of times to ignore a "Breakpoint".
+
+   hits
+
+      Count of the number of times a "Breakpoint" has been hit.
+
+class bdb.Bdb(skip=None)
+
+   "Bdb" 类是作为通用的 Python 调试器基类。
+
+   这个类负责追踪工具的细节；所派生的类应当实现用户交互。 标准调试器类
+   ("pdb.Pdb") 就是一个例子。
+
+   如果给出了 *skip* 参数，它必须是一个包含 glob 风格的模块名称模式的
+   可迭代对象。 调试器将不会步进到来自与这些模式相匹配的模块的帧。 一
+   个帧是否会被视为来自特定的模块是由帧的 "__name__" 全局变量来确定的
+   。
+
+   3.1 新版功能: *skip* 参数。
+
+   "Bdb" 的以下方法通常不需要被重载。
+
+   canonic(filename)
+
+      Return canonical form of *filename*.
+
+      For real file names, the canonical form is an operating-system-
+      dependent, "case-normalized" "absolute path". A *filename* with
+      angle brackets, such as ""<stdin>"" generated in interactive
+      mode, is returned unchanged.
+
+   reset()
+
+      将 "botframe", "stopframe", "returnframe" 和 "quitting" 属性设置
+      为准备开始调试的值。
+
+   trace_dispatch(frame, event, arg)
+
+      此函数被安装为被调试帧的追踪函数。 它的返回值是新的追踪函数（在
+      大多数情况下就是它自身）。
+
+      默认实现会决定如何分派帧，这取决于即将被执行的事件的类型（作为字
+      符串传入）。 *event* 可以是下列值之一:
+
+      * ""line"": 一个新的代码行即将被执行。
+
+      * ""call"": 一个函数即将被调用，或者进入了另一个代码块。
+
+      * ""return"": 一个函数或其他代码块即将返回。
+
+      * ""exception"": 一个异常已发生。
+
+      * ""c_call"": 一个 C 函数即将被调用。
+
+      * ""c_return"": 一个 C 函数已返回。
+
+      * ""c_exception"": 一个 C 函数引发了异常。
+
+      对于 Python 事件，调用了专门的函数（见下文）。 对于 C 事件，不执
+      行任何操作。
+
+      *arg* 形参取决于之前的事件。
+
+      请参阅 "sys.settrace()" 的文档了解追踪函数的更多信息。 对于代码
+      和帧对象的详情，请参考 标准类型层级结构。
+
+   dispatch_line(frame)
+
+      如果调试器应当在当前行上停止，则发起调用 "user_line()" 方法（该
+      方法应当在子类中被重载）。 如果设置了 "Bdb.quitting" 旗标（可以
+      通过 "user_line()" 设置）则将引发 "BdbQuit" 异常。 返回一个对
+      "trace_dispatch()" 方法的引用以便在该作用域内进一步地追踪。
+
+   dispatch_call(frame, arg)
+
+      如果调试器应当在此函数调用上停止，则发起调用 "user_call()" 方法
+      （该方法应当在子类中被重载）。 如果设置了 "Bdb.quitting" 旗标（
+      可以通过 "user_call()" 设置）则将引发 "BdbQuit" 异常。 返回一个
+      对 "trace_dispatch()" 方法的引用以便在该作用域内进一步地追踪。
+
+   dispatch_return(frame, arg)
+
+      如果调试器应当在此函数返回时停止，则发起调用 "user_return()" 方
+      法（该方法应当在子类中被重载）。 如果设置了 "Bdb.quitting" 旗标
+      （可以通过 "user_return()" 设置）则将引发 "BdbQuit" 异常。 返回
+      一个对 "trace_dispatch()" 方法的引用以便在该作用域内进一步地追踪
+      。
+
+   dispatch_exception(frame, arg)
+
+      如果调试器应当在此异常上停止，则发起调用 "user_exception()" 方法
+      （该方法应当在子类中被重载）。 如果设置了 "Bdb.quitting" 旗标（
+      可以通过 "user_exception()" 设置）则将引发 "BdbQuit" 异常。 返回
+      一个对 "trace_dispatch()" 方法的引用以便在该作用域内进一步地追踪
+      。
+
+   通常情况下派生的类不会重载下列方法，但是如果想要重新定义停止和中断
+   点的定义则可能会重载它们。
+
+   is_skipped_line(module_name)
+
+      Return True if *module_name* matches any skip pattern.
+
+   stop_here(frame)
+
+      Return True if *frame* is below the starting frame in the stack.
+
+   break_here(frame)
+
+      Return True if there is an effective breakpoint for this line.
+
+      Check whether a line or function breakpoint exists and is in
+      effect.  Delete temporary breakpoints based on information from
+      "effective()".
+
+   break_anywhere(frame)
+
+      Return True if any breakpoint exists for *frame*'s filename.
+
+   派生的类应当重载这些方法以获取调试器操作的控制权。
+
+   user_call(frame, argument_list)
+
+      Called from "dispatch_call()" if a break might stop inside the
+      called function.
+
+   user_line(frame)
+
+      Called from "dispatch_line()" when either "stop_here()" or
+      "break_here()" returns "True".
+
+   user_return(frame, return_value)
+
+      Called from "dispatch_return()" when "stop_here()" returns
+      "True".
+
+   user_exception(frame, exc_info)
+
+      Called from "dispatch_exception()" when "stop_here()" returns
+      "True".
+
+   do_clear(arg)
+
+      处理当一个中断点属于临时性中断点时是否必须要移除它。
+
+      此方法必须由派生类来实现。
+
+   派生类与客户端可以调用以下方法来影响步进状态。
+
+   set_step()
+
+      在一行代码之后停止。
+
+   set_next(frame)
+
+      在给定的帧以内或以下的下一行停止。
+
+   set_return(frame)
+
+      当从给定的帧返回时停止。
+
+   set_until(frame, lineno=None)
+
+      Stop when the line with the *lineno* greater than the current
+      one is reached or when returning from current frame.
+
+   set_trace([frame])
+
+      从 *frame* 开始调试。 如果未指定 *frame*，则从调用者的帧开始调试
+      。
+
+   set_continue()
+
+      仅在中断点上或是当结束时停止。 如果不存在中断点，则将系统追踪函
+      数设为 "None"。
+
+   set_quit()
+
+      将 "quitting" 属性设为 "True"。 这将在对某个 "dispatch_*()" 方法
+      的下一次调用中引发 "BdbQuit"。
+
+   派生的类和客户端可以调用下列方法来操纵中断点。 如果出现错误则这些方
+   法将返回一个包含错误消息的字符串，或者如果一切正常则返回 "None"。
+
+   set_break(filename, lineno, temporary=False, cond=None, funcname=None)
+
+      设置一个新的中断点。 如果对于作为参数传入的 *filename* 不存在
+      *lineno*，则返回一条错误消息。 *filename* 应为规范的形式，如在
+      "canonic()" 方法中描述的。
+
+   clear_break(filename, lineno)
+
+      Delete the breakpoints in *filename* and *lineno*.  If none were
+      set, return an error message.
+
+   clear_bpbynumber(arg)
+
+      删除 "Breakpoint.bpbynumber" 中索引号为 *arg* 的中断点。 如果
+      *arg* 不是数字或超出范围，则返回一条错误消息。
+
+   clear_all_file_breaks(filename)
+
+      Delete all breakpoints in *filename*.  If none were set, return
+      an error message.
+
+   clear_all_breaks()
+
+      Delete all existing breakpoints.  If none were set, return an
+      error message.
+
+   get_bpbynumber(arg)
+
+      返回由指定数字所指明的中断点。 如果 *arg* 是一个字符串，它将被转
+      换为一个数字。 如果 *arg* 不是一个表示数字的字符串，如果给定的中
+      断点不存在或者已被删除，则会引发 "ValueError"。
+
+      3.2 新版功能.
+
+   get_break(filename, lineno)
+
+      Return True if there is a breakpoint for *lineno* in *filename*.
+
+   get_breaks(filename, lineno)
+
+      返回 *filename* 中在 *lineno* 上的所有中断点，或者如果未设置任何
+      中断点则返回一个空列表。
+
+   get_file_breaks(filename)
+
+      返回 *filename* 中的所有中断点，或者如果未设置任何中断点则返回一
+      个空列表。
+
+   get_all_breaks()
+
+      返回已设置的所有中断点。
+
+   派生类与客户端可以调用以下方法来获取一个代表栈回溯信息的数组结构。
+
+   get_stack(f, t)
+
+      Return a list of (frame, lineno) tuples in a stack trace, and a
+      size.
+
+      The most recently called frame is last in the list. The size is
+      the number of frames below the frame where the debugger was
+      invoked.
+
+   format_stack_entry(frame_lineno, lprefix=': ')
+
+      Return a string with information about a stack entry, which is a
+      "(frame, lineno)" tuple.  The return string contains:
+
+      * The canonical filename which contains the frame.
+
+      * The function name or ""<lambda>"".
+
+      * 输入参数。
+
+      * 返回值。
+
+      * 代码的行（如果存在）。
+
+   以下两个方法可由客户端调用以使用一个调试器来调试一条以字符串形式给
+   出的 *statement*。
+
+   run(cmd, globals=None, locals=None)
+
+      调试一条通过 "exec()" 函数执行的语句。 *globals* 默认为
+      "__main__.__dict__"，*locals* 默认为 *globals*。
+
+   runeval(expr, globals=None, locals=None)
+
+      调试一条通过 "eval()" 函数执行的表达式。 *globals* 和 *locals*
+      的含义与在 "run()" 中的相同。
+
+   runctx(cmd, globals, locals)
+
+      为了保证向下兼容性。 调用 "run()" 方法。
+
+   runcall(func, /, *args, **kwds)
+
+      调试一个单独的函数调用，并返回其结果。
+
+最后，这个模块定义了以下函数:
+
+bdb.checkfuncname(b, frame)
+
+   Return True if we should break here, depending on the way the
+   "Breakpoint" *b* was set.
+
+   If it was set via line number, it checks if "b.line" is the same as
+   the one in *frame*. If the breakpoint was set via "function name",
+   we have to check we are in the right *frame* (the right function)
+   and if we are on its first executable line.
+
+bdb.effective(file, line, frame)
+
+   Return "(active breakpoint, delete temporary flag)" or "(None,
+   None)" as the breakpoint to act upon.
+
+   The *active breakpoint* is the first entry in "bplist" for the
+   ("file", "line") (which must exist) that is "enabled", for which
+   "checkfuncname()" is True, and that has neither a False "condition"
+   nor positive "ignore" count.  The *flag*, meaning that a temporary
+   breakpoint should be deleted, is False only when the "cond" cannot
+   be evaluated (in which case, "ignore" count is ignored).
+
+   If no such entry exists, then (None, None) is returned.
+
+bdb.set_trace()
+
+   使用一个来自调用方的帧的 "Bdb" 实例开始调试。

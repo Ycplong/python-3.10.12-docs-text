@@ -1,0 +1,271 @@
+"sysconfig" —— 提供对 Python 配置信息的访问支持
+***********************************************
+
+3.2 新版功能.
+
+**源代码：** Lib/sysconfig.py
+
+======================================================================
+
+"sysconfig" 模块提供了对 Python 配置信息的访问支持，比如安装路径列表和
+有关当前平台的配置变量。
+
+
+配置变量
+========
+
+Python 的发行版中包含一个 "Makefile" 和一个 "pyconfig.h" 头文件，这是
+构建 Python 二进制文件本身和用 "distutils" 编译的第三方 C 语言扩展所必
+需的。
+
+"sysconfig" 将这些文件中的所有变量放在一个字典对象中，可用
+"get_config_vars()" 或 "get_config_var()" 访问。
+
+请注意在 Windows 上，这是一个小得多的集合。
+
+sysconfig.get_config_vars(*args)
+
+   不带参数时，返回一个与当前平台相关的所有配置变量的字典。
+
+   带参数时，返回一个由在配置变量字典中查找每个参数的结果的值组成的列
+   表。
+
+   对于每个参数，如果未找到值，则返回 "None"。
+
+sysconfig.get_config_var(name)
+
+   返回单个变量 *name* 的值。 等价于 "get_config_vars().get(name)"。
+
+   如果未找到 *name*，则返回 "None"。
+
+用法示例:
+
+   >>> import sysconfig
+   >>> sysconfig.get_config_var('Py_ENABLE_SHARED')
+   0
+   >>> sysconfig.get_config_var('LIBDIR')
+   '/usr/local/lib'
+   >>> sysconfig.get_config_vars('AR', 'CXX')
+   ['ar', 'g++']
+
+
+安装路径
+========
+
+Python 会使用根据平台和安装选项区别处理的安装方案。 这些方案保存在
+"sysconfig" 中基于 "os.name" 的返回值来确定的唯一标识符下。
+
+每个使用 "distutils" 或基于 Distutils 的系统安装的新组件都将遵循同样的
+方案将其文件拷贝到正确的位置。
+
+Python 目前支持六种方案:
+
+* *posix_prefix*: 针对 POSIX 平台如 Linux 或 macOS 的方案。 这是在安装
+  Python 或者组件时的默认方案。
+
+* *posix_home*: 当在安装时使用了 *home* 选项时针对 POSIX 平台所使用的
+  方案。 此方案会在通过 Distutils 附带指定的前缀安装组件时被使用。
+
+* *posix_user*: 当通过 Distutils 安装组件并且使用了 *user* 选项时针对
+  POSIX 平台所使用的方案。 此方案会在用户家目录下定义路径位置。
+
+* *nt*: 针对 NT 平台如 Windows 的方案。
+
+* *nt_user*: 针对 NT 平台，当使用了 *user* 选项时的方案。
+
+* *osx_framework_user*: 针对 macOS，当使用了 *user* 选项时的方案。
+
+每个方案本身由一系列路径组成并且每个路径都有唯一的标识符。 Python 目前
+使用了八个路径:
+
+* *stdlib*: 包含非平台专属的标准 Python 库文件的目录。
+
+* *platstdlib*: 包含平台专属的标准 Python 库文件的目录。
+
+* *platlib*: 用于站点专属、平台专属的文件的目录。
+
+* *purelib*: 用于站点专属、非平台专属的文件的目录。
+
+* *include*: 用于非平台专属的头文件的目录。
+
+* *platinclude*: 用于平台专属的头文件的目录。
+
+* *scripts*: 用于脚本文件的目录。
+
+* *data*: 用于数据文件的目录。
+
+"sysconfig" 提供了一些函数来确定这些路径。
+
+sysconfig.get_scheme_names()
+
+   返回一个包含 "sysconfig" 目前支持的所有方案的元组。
+
+sysconfig.get_default_scheme()
+
+   返回针对当前平台的默认方案的名称。
+
+   3.10 新版功能: 此函数之前被命名为 "_get_default_scheme()" 并被认为
+   属性实现细节。
+
+sysconfig.get_preferred_scheme(key)
+
+   返回针对由 *key* 所指定的安装布局的推荐方案的名称。
+
+   *key* 必须为 ""prefix"", ""home"" 或 ""user""。
+
+   该返回值是 "get_scheme_names()" 中列出的一个方案名称。 它可以被传给
+   接受 *scheme* 参数的 "sysconfig" 函数，如 "get_paths()"。
+
+   3.10 新版功能.
+
+sysconfig._get_preferred_schemes()
+
+   返回一个包含当前平台推荐的方案名称的字典。 Python 的实现方和再分发
+   方可以将他们推荐的方案添加到 "_INSTALL_SCHEMES" 模块层级全局值，并
+   修改此函数以返回这些方案名称，例如为各种系统和语言的包管理器提供不
+   同的方案，这样它们各自安装的包就不会彼此混淆。
+
+   最终用户不应使用此函数，而应改用 "get_default_scheme()" 和
+   "get_preferred_scheme()"。
+
+   3.10 新版功能.
+
+sysconfig.get_path_names()
+
+   返回一个包含在 "sysconfig" 中目前支持的所有路径名称的元组。
+
+sysconfig.get_path(name[, scheme[, vars[, expand]]])
+
+   返回一个对应于路径 *name*，来自名为 *scheme* 的安装方案的安装路径。
+
+   *name* 必须是一个来自 "get_path_names()" 所返回的列表的值。
+
+   "sysconfig" 会针对每个平台保存与每个路径名称相对应的安装路径，并带
+   有可扩展的变量。 例如针对 *nt* 方案的 *stdlib* 路径是: "{base}/Lib"
+   。
+
+   "get_path()" 将使用 "get_config_vars()" 所返回的变量来扩展路径。 所
+   有变量对于每种平台都有相应的默认值因此使用者可以调用此函数来获取默
+   认值。
+
+   如果提供了 *scheme*，则它必须是一个来自 "get_scheme_names()" 所返回
+   的列表的值。 在其他情况下，将会使用针对当前平台的默认方案。
+
+   如果提供了 *vars*，则它必须是一个将要更新 "get_config_vars()" 所返
+   回的字典的字典。
+
+   如果 *expand* 被设为 "False"，则将不使用这些变量来扩展路径。
+
+   如果 *name* 未找到，则会引发 "KeyError"。
+
+sysconfig.get_paths([scheme[, vars[, expand]]])
+
+   返回一个包含与特定安装方案对应的安装路径的字典。 请参阅
+   "get_path()" 了解详情。
+
+   如果未提供 *scheme*，则将使用针对当前平台的默认方案。
+
+   如果提供了 *vars*，则它必须是一个将要更新用于扩展的字典的变量字典。
+
+   如果 *expand* 被设为假值，则路径将不会被扩展。
+
+   如果 *scheme* 不是一个现有的方案，则 "get_paths()" 将引发
+   "KeyError"。
+
+
+其他功能
+========
+
+sysconfig.get_python_version()
+
+   以字符串形式 "MAJOR.MINOR" 返回 Python 版本号。 类似于 "'%d.%d' %
+   sys.version_info[:2]"。
+
+sysconfig.get_platform()
+
+   返回一个标识当前平台的字符串。
+
+   这主要被用来区分平台专属的构建目录和平台专属的构建分发版。 通常包括
+   OS 名称和版本以及架构（即 'os.uname()' 所提供的信息)，但是实际包括
+   的信息取决于具体 OS；例如，在 Linux 上，内核版本号并不是特别重要。
+
+   返回值的示例：
+
+   * linux-i586
+
+   * linux-alpha (?)
+
+   * solaris-2.6-sun4u
+
+   Windows将返回以下之一：
+
+   * win-amd64 (在 AMD64, aka x86_64, Intel64, 和 EM64T上的64位
+     Windows )
+
+   * win32（所有其他的 —— 确切地说，返回 sys.platform）
+
+   macOS 可以返回:
+
+   * macosx-10.6-ppc
+
+   * macosx-10.4-ppc64
+
+   * macosx-10.3-i386
+
+   * macosx-10.4-fat
+
+   对于其他非-POSIX 平台， 目前只是返回 "sys.platform" 。
+
+sysconfig.is_python_build()
+
+   如果正在运行的 Python 解释器是使用源代码构建的并在其构建位置上运行
+   ，而不是在其他位置例如通过运行 "make install" 或通过二进制机器码安
+   装程序安装则返回 "True"。
+
+sysconfig.parse_config_h(fp[, vars])
+
+   解析一个 "config.h" 风格的文件。
+
+   *fp* 是一个指向 "config.h" 风格的文件的文件类对象。
+
+   返回一个包含名称/值对的字典。 如果传入一个可选的字典作为第二个参数
+   ，则将使用它而不是新的字典，并使用从文件中读取的值更新它。
+
+sysconfig.get_config_h_filename()
+
+   返回  "pyconfig.h" 的目录
+
+sysconfig.get_makefile_filename()
+
+   返回 "Makefile" 的目录
+
+
+将 "sysconfig" 作为脚本使用
+===========================
+
+You can use "sysconfig" as a script with Python's *-m* option:
+
+   $ python -m sysconfig
+   Platform: "macosx-10.4-i386"
+   Python version: "3.2"
+   Current installation scheme: "posix_prefix"
+
+   Paths:
+           data = "/usr/local"
+           include = "/Users/tarek/Dev/svn.python.org/py3k/Include"
+           platinclude = "."
+           platlib = "/usr/local/lib/python3.2/site-packages"
+           platstdlib = "/usr/local/lib/python3.2"
+           purelib = "/usr/local/lib/python3.2/site-packages"
+           scripts = "/usr/local/bin"
+           stdlib = "/usr/local/lib/python3.2"
+
+   Variables:
+           AC_APPLE_UNIVERSAL_BUILD = "0"
+           AIX_GENUINE_CPLUSPLUS = "0"
+           AR = "ar"
+           ARFLAGS = "rc"
+           ...
+
+此调用将把 "get_platform()", "get_python_version()", "get_path()" 和
+"get_config_vars()" 所返回的信息打印至标准输出。

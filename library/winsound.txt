@@ -1,0 +1,130 @@
+"winsound" —— Windows 系统的音频播放接口
+****************************************
+
+======================================================================
+
+通过 "winsound" 模块可访问 Windows 平台的基础音频播放机制。包括一些函
+数和几个常量。
+
+winsound.Beep(frequency, duration)
+
+   让 PC 的扬声器发出提示音。*frequency* 参数可指定声音的频率，单位是
+   赫兹，必须位于 37 到 32,767 之间。*duration* 参数则指定了声音应持续
+   的毫秒数。若系统无法让扬声器发声，则会触发 "RuntimeError"。
+
+winsound.PlaySound(sound, flags)
+
+   由平台 API 调用底层的 "PlaySound()" 函数。 参数 *sound* 可以是文件
+   名、系统音频的别名、*bytes-like object* 的音频数据或``None``。 如何
+   解释取决于 *flags* 的值，可为以下常数的二进制 OR 组合。 如果
+   *sound* 参数为 "None"，则当前播放的波形音频会全部停止。如果系统报错
+   ， 则会触发 "RuntimeError"。
+
+winsound.MessageBeep(type=MB_OK)
+
+   由平台 API 调用底层的 "MessageBeep()" 函数。用于播放注册表中指定的
+   音频。 *type* 参数指定播放的音频；可能的值是 "-1"、
+   "MB_ICONASTERISK"、"MB_ICONEXCLAMATION"、"MB_ICONHAND"、
+   "MB_ICONQUESTION" 和 "MB_OK"，下面会介绍。值 "-1" 会生成一个 "简单
+   的嘀声"；若其他的音频无法播放，这是最后的退路。如果系统报错，则会触
+   发 "RuntimeError" 。
+
+winsound.SND_FILENAME
+
+   参数 *sound* 指明 WAV 文件名。不要与 "SND_ALIAS" 一起使用。
+
+winsound.SND_ALIAS
+
+   参数 *sound* 是注册表内关联的音频名称。 如果注册表中无此名称，则播
+   放系统默认的声音，除非同时设定了 "SND_NODEFAULT" 。 如果没有注册默
+   认声音，则会触发 "RuntimeError"。 请勿与 "SND_FILENAME" 一起使用。
+
+   所有的 Win32 系统至少支持以下音频名称；大多数系统支持的音频都多于这
+   些：
+
+   +----------------------------+------------------------------------------+
+   | "PlaySound()" *name* 参数  | 对应的控制面板音频名                     |
+   |============================|==========================================|
+   | "'SystemAsterisk'"         | 星号                                     |
+   +----------------------------+------------------------------------------+
+   | "'SystemExclamation'"      | 感叹号                                   |
+   +----------------------------+------------------------------------------+
+   | "'SystemExit'"             | 退出 Windows                             |
+   +----------------------------+------------------------------------------+
+   | "'SystemHand'"             | 关键性停止                               |
+   +----------------------------+------------------------------------------+
+   | "'SystemQuestion'"         | 问题                                     |
+   +----------------------------+------------------------------------------+
+
+   例如：
+
+      import winsound
+      # Play Windows exit sound.
+      winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
+
+      # Probably play Windows default sound, if any is registered (because
+      # "*" probably isn't the registered name of any sound).
+      winsound.PlaySound("*", winsound.SND_ALIAS)
+
+winsound.SND_LOOP
+
+   循环播放音频。为避免阻塞，必须同时使用 "SND_ASYNC" 标志。不能与
+   "SND_MEMORY" 一起使用。
+
+winsound.SND_MEMORY
+
+   "PlaySound()" 的 *sound* 形参是一个 WAV 文件的内存镜像，作为一个
+   *bytes-like object*。
+
+   注解:
+
+     本模块不支持异步播放音频的内存镜像，所以该标志和 "SND_ASYNC" 的组
+     合将触发 "RuntimeError"。
+
+winsound.SND_PURGE
+
+   停止播放指定音频的所有实例。
+
+   注解:
+
+     新版 Windows 平台不支持本标志。
+
+winsound.SND_ASYNC
+
+   立即返回，允许异步播放音频。
+
+winsound.SND_NODEFAULT
+
+   即便找不到指定的音频，也不播放系统默认音频。
+
+winsound.SND_NOSTOP
+
+   不打断正在播放的音频。
+
+winsound.SND_NOWAIT
+
+   如果音频驱动程序忙，则立即返回。
+
+   注解:
+
+     新版 Windows 平台不支持本标志。
+
+winsound.MB_ICONASTERISK
+
+   播放 "SystemDefault" 音频。
+
+winsound.MB_ICONEXCLAMATION
+
+   播放 "SystemExclamation" 音频。
+
+winsound.MB_ICONHAND
+
+   播放 "SystemHand" 音频。
+
+winsound.MB_ICONQUESTION
+
+   播放 "SystemQuestion" 音频。
+
+winsound.MB_OK
+
+   播放 "SystemDefault" 音频。

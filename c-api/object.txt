@@ -1,0 +1,318 @@
+对象协议
+********
+
+PyObject *Py_NotImplemented
+
+   "NotImplemented" 单例，用于标记某个操作没有针对给定类型组合的实现。
+
+Py_RETURN_NOTIMPLEMENTED
+
+   C 函数内部应正确处理 "Py_NotImplemented" 的返回过程（即增加
+   NotImplemented 的引用计数并返回之）。
+
+int PyObject_Print(PyObject *o, FILE *fp, int flags)
+
+   将对象 *o* 写入到文件 *fp*。 出错时返回 "-1" 。 旗标参数被用于启用
+   特定的输出选项。 目前唯一支持的选项是 "Py_PRINT_RAW"；如果给出该选
+   项，则将写入对象的 "str()" 而不是 "repr()"。
+
+int PyObject_HasAttr(PyObject *o, PyObject *attr_name)
+    * Part of the Stable ABI.*
+
+   如果 *o* 带有属性 *attr_name*，则返回 "1"，否则返回 "0"。这相当于
+   Python 表达式 "hasattr(o, attr_name)"。 此函数总是成功。
+
+   注意，在调用 "__getattr__()" 和 "__getattribute__()" 方法时发生的异
+   常将被抑制。若要获得错误报告，请换用 "PyObject_GetAttr()" 。
+
+int PyObject_HasAttrString(PyObject *o, const char *attr_name)
+    * Part of the Stable ABI.*
+
+   如果 *o* 带有属性 *attr_name*，则返回 "1"，否则返回 "0"。这相当于
+   Python 表达式 "hasattr(o, attr_name)"。 此函数总是成功。
+
+   注意，在调用 "__getattr__()" 和 "__getattribute__()" 方法并创建一个
+   临时字符串对象时，异常将被抑制。若要获得错误报告，请换用
+   "PyObject_GetAttrString()" 。
+
+PyObject *PyObject_GetAttr(PyObject *o, PyObject *attr_name)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   从对象 *o* 中读取名为 *attr_name* 的属性。成功返回属性值，失败则返
+   回  "NULL"。 这相当于 Python 表达式 "o.attr_name"。
+
+PyObject *PyObject_GetAttrString(PyObject *o, const char *attr_name)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   从对象 *o* 中读取一个名为 *attr_name* 的属性。成功时返回属性值，失
+   败则返回 "NULL"。这相当于 Python 表达式 "o.attr_name"。
+
+PyObject *PyObject_GenericGetAttr(PyObject *o, PyObject *name)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   通用的属性获取函数，用于放入类型对象的 "tp_getattro" 槽中。它在类的
+   字典中（位于对象的 MRO 中）查找某个描述符，并在对象的 "__dict__" 中
+   查找某个属性。正如 实现描述器 所述，数据描述符优先于实例属性，而非
+   数据描述符则不优先。失败则会触发 "AttributeError" 。
+
+int PyObject_SetAttr(PyObject *o, PyObject *attr_name, PyObject *v)
+    * Part of the Stable ABI.*
+
+   将对象 *o* 中名为 *attr_name* 的属性值设为 *v* 。失败时引发异常并返
+   回 "-1"；成功时返 回``0`` 。这相当于 Python 语句 "o.attr_name = v"
+   。
+
+   如果 *v* 为 "NULL"，该属性将被删除。 此行为已被弃用而应改用
+   "PyObject_DelAttr()"，但目前还没有移除它的计划。
+
+int PyObject_SetAttrString(PyObject *o, const char *attr_name, PyObject *v)
+    * Part of the Stable ABI.*
+
+   将对象 *o* 中名为 *attr_name* 的属性值设为 *v* 。失败时引发异常并返
+   回 "-1"；成功时返 回``0`` 。这相当于 Python 语句 "o.attr_name = v"
+   。
+
+   如果 *v* 为 "NULL"，该属性将被删除，但是此功能已被弃用而应改用
+   "PyObject_DelAttrString()"。
+
+int PyObject_GenericSetAttr(PyObject *o, PyObject *name, PyObject *value)
+    * Part of the Stable ABI.*
+
+   通用的属性设置和删除函数，用于放入类型对象的 "tp_setattro" 槽。它在
+   类的字典中（位于对象的MRO中）查找数据描述器，如果找到，则将比在实例
+   字典中设置或删除属性优先执行。否则，该属性将在对象的 "__dict__" 中
+   设置或删除。如果成功将返回 "0"，否则将引发 "AttributeError" 并返回
+   "-1"。
+
+int PyObject_DelAttr(PyObject *o, PyObject *attr_name)
+
+   删除对象 *o* 中名为 *attr_name* 的属性。失败时返回 "-1"。这相当于
+   Python 语句 "del o.attr_name"。
+
+int PyObject_DelAttrString(PyObject *o, const char *attr_name)
+
+   删除对象 *o* 中名为 *attr_name* 的属性。失败时返回 "-1"。这相当于
+   Python 语句 "del o.attr_name"。
+
+PyObject *PyObject_GenericGetDict(PyObject *o, void *context)
+    *Return value: New reference.** Part of the Stable ABI since
+   version 3.10.*
+
+   "__dict__" 描述符的获取函数的一种通用实现。必要时会创建该字典。
+
+   3.3 新版功能.
+
+int PyObject_GenericSetDict(PyObject *o, PyObject *value, void *context)
+    * Part of the Stable ABI since version 3.7.*
+
+   "__dict__" 描述符设置函数的一种通用实现。这里不允许删除该字典。
+
+   3.3 新版功能.
+
+PyObject *PyObject_RichCompare(PyObject *o1, PyObject *o2, int opid)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   用 *opid* 指定的操作比较 *o1* 和 *o2* 的值，必须是 "Py_LT" 、
+   "Py_LE" 、 "Py_EQ" 、 "Py_NE" 、 "Py_GT" 或 "Py_GE" 之一，分别对应
+   于``<"、``<=" 、"==" 、 "!=" 、">" 或 ">="。这相当于 Python 表达式
+   "o1 op o2"，其中 "op" 是对应于 *opid* 的操作符。成功时返回比较值，
+   失败时返回 "NULL"。
+
+int PyObject_RichCompareBool(PyObject *o1, PyObject *o2, int opid)
+    * Part of the Stable ABI.*
+
+   用 *opid* 指定的操作比较 *o1* 和 *o2* 的值，必须是 "Py_LT" 、
+   "Py_LE" 、 "Py_EQ" 、 "Py_NE" 、 "Py_GT" 或 "Py_GE" 之一，分别对应
+   于 "<" 、"<="、 "==" 、"!=" 、">" 或 ">="。错误时返回 "-1"，若结果
+   为 false 则返回 "0"，否则返回 "1"。这相当于 Python 表达式 "o1 op
+   o2"，其中 "op" 是对应于 *opid* 的操作符。
+
+注解:
+
+  如果 *o1* 和 *o2* 是同一个对象，"PyObject_RichCompareBool()" 为
+  "Py_EQ" 则返回 "1" ，为 "Py_NE" 则返回 "0"。
+
+PyObject *PyObject_Format(PyObject *obj, PyObject *format_spec)
+    * Part of the Stable ABI.*
+
+   Format *obj* using *format_spec*. This is equivalent to the Python
+   expression "format(obj, format_spec)".
+
+   *format_spec* may be "NULL". In this case the call is equivalent to
+   "format(obj)". Returns the formatted string on success, "NULL" on
+   failure.
+
+PyObject *PyObject_Repr(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   计算对象 *o* 的字符串形式。 成功时返回字符串，失败时返回 "NULL"。
+   这相当于 Python 表达式 "repr(o)"。 由内置函数 "repr()"  调用。
+
+   在 3.4 版更改: 该函数现在包含一个调试断言，用以确保不会静默地丢弃活
+   动的异常。
+
+PyObject *PyObject_ASCII(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   与 "PyObject_Repr()" 一样，计算对象 *o* 的字符串形式，但在
+   "PyObject_Repr()" 返回的字符串中用 "\x"、"\u" 或 "\U" 转义非 ASCII
+   字符。这将生成一个类似于 Python 2 中由 "PyObject_Repr()" 返回的字符
+   串。由内置函数 "ascii()" 调用。
+
+PyObject *PyObject_Str(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   计算对象 *o* 的字符串形式。 成功时返回字符串，失败时返回 "NULL"。
+   这相当于 Python 表达式 "str(o)"。由内置函数 "str()" 调用，因此也由
+   "print()" 函数调用。
+
+   在 3.4 版更改: 该函数现在包含一个调试断言，用以确保不会静默地丢弃活
+   动的异常。
+
+PyObject *PyObject_Bytes(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   计算对象 *o* 的字节形式。失败时返回 "NULL"，成功时返回一个字节串对
+   象。这相当于 *o* 不是整数时的 Python 表达式 "bytes(o)" 。与
+   "bytes(o)" 不同的是，当 *o* 是整数而不是初始为 0 的字节串对象时，会
+   触发 TypeError。
+
+int PyObject_IsSubclass(PyObject *derived, PyObject *cls)
+    * Part of the Stable ABI.*
+
+   如果 *derived* 类与 *cls* 类相同或为其派生类，则返回 "1"，否则返回
+   "0"。 如果出错则返回 "-1"。
+
+   如果 *cls* 是元组，则会对 *cls* 进行逐项检测。如果至少有一次检测返
+   回 "1"，结果将为 "1"，否则将是 "0"。
+
+   正如 **PEP 3119** 所述，如果 *cls* 带有 "__subclasscheck__()" 方法
+   ，将会被调用以确定子类的状态。 否则，如果 *derived* 是个直接或间接
+   子类，即包含在 "cls.__mro__" 中，那么它就是 *cls* 的一个子类。
+
+   通常只有类对象才会被视为类，即 "type" 或派生类的实例。然而，对象可
+   以通过拥有 "__bases__" 属性（必须是基类的元组）来覆盖这一点。
+
+int PyObject_IsInstance(PyObject *inst, PyObject *cls)
+    * Part of the Stable ABI.*
+
+   如果 *inst* 是 *cls* 类或其子类的实例，则返回 "1"，如果不是则返回
+   ``0``。 如果出错则返回 "-1" 并设置一个异常。
+
+   如果 *cls* 是元组，则会对 *cls* 进行逐项检测。如果至少有一次检测返
+   回 "1"，结果将为 "1"，否则将是 "0"。
+
+   正如 **PEP 3119** 所述，如果 *cls* 带有 "__subclasscheck__()" 方法
+   ，将会被调用以确定子类的状态。 否则，如果 *derived* 是 *cls* 的子类
+   ，那么它就是 *cls* 的一个实例。
+
+   实例 *inst* 可以通过 "__class__" 属性来覆盖其所属类。
+
+   对象 *cls* 是否被认作类，以及基类是什么，均可通过 "__bases__" 属性
+   （必须是基类的元组）进行覆盖。
+
+Py_hash_t PyObject_Hash(PyObject *o)
+    * Part of the Stable ABI.*
+
+   计算并返回对象的哈希值 *o*。 失败时返回 "-1"。这相当于 Python 表达
+   式 "hash(o)"。
+
+   在 3.2 版更改: 现在的返回类型是 Py_hash_t。 这是一个大小与
+   "Py_ssize_t" 相同的有符号整数。
+
+Py_hash_t PyObject_HashNotImplemented(PyObject *o)
+    * Part of the Stable ABI.*
+
+   Set a "TypeError" indicating that "type(o)" is not *hashable* and
+   return "-1". This function receives special treatment when stored
+   in a "tp_hash" slot, allowing a type to explicitly indicate to the
+   interpreter that it is not hashable.
+
+int PyObject_IsTrue(PyObject *o)
+    * Part of the Stable ABI.*
+
+   如果对象 *o* 被认为是 true，则返回 "1"，否则返回 "0"。这相当于
+   Python 表达式 "not not o"。 失败则返回 "-1"。
+
+int PyObject_Not(PyObject *o)
+    * Part of the Stable ABI.*
+
+   如果对象 *o* 被认为是 true，则返回 "1"，否则返回 "0"。这相当于
+   Python 表达式 "not not o"。 失败则返回 "-1"。
+
+PyObject *PyObject_Type(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   When *o* is non-"NULL", returns a type object corresponding to the
+   object type of object *o*. On failure, raises "SystemError" and
+   returns "NULL".  This is equivalent to the Python expression
+   "type(o)". This function increments the reference count of the
+   return value. There's really no reason to use this function instead
+   of the "Py_TYPE()" function, which returns a pointer of type
+   "PyTypeObject*", except when the incremented reference count is
+   needed.
+
+int PyObject_TypeCheck(PyObject *o, PyTypeObject *type)
+
+   如果对象 *o* 是 *type* 类型或其子类型，则返回非零，否则返回 "0"。两
+   个参数都必须非 "NULL"。
+
+Py_ssize_t PyObject_Size(PyObject *o)
+Py_ssize_t PyObject_Length(PyObject *o)
+    * Part of the Stable ABI.*
+
+   返回对象 *o* 的长度。 如果对象 *o* 支持序列和映射协议，则返回序列长
+   度。 出错时返回 "-1"。这等同于 Python 表达式 "len(o)"。
+
+Py_ssize_t PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
+
+   返回对象 *o* 的估计长度。首先尝试返回实际长度，然后用
+   "__length_hint__()" 进行估计，最后返回默认值。出错时返回``-1``。这
+   等同于 Python 表达式 "operator.length_hint(o, defaultvalue)"。
+
+   3.4 新版功能.
+
+PyObject *PyObject_GetItem(PyObject *o, PyObject *key)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   返回对象 *key* 对应的 *o* 元素，或在失败时返回 "NULL"。这等同于
+   Python 表达式 "o[key]"。
+
+int PyObject_SetItem(PyObject *o, PyObject *key, PyObject *v)
+    * Part of the Stable ABI.*
+
+   将对象 *key* 映射到值 *v*。 失败时引发异常并返回 "-1"；成功时返回
+   "0"。 这相当于 Python 语句 "o[key] = v"。该函数 *不会* 偷取 *v* 的
+   引用计数。
+
+int PyObject_DelItem(PyObject *o, PyObject *key)
+    * Part of the Stable ABI.*
+
+   从对象 *o* 中移除对象 *key* 的映射。失败时返回 "-1"。 这相当于
+   Python 语句 "del o[key]"。
+
+PyObject *PyObject_Dir(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   相当于 Python 表达式 "dir(o)"，返回一个（可能为空）适合对象参数的字
+   符串列表，如果出错则返回 "NULL"。 如果参数为 "NULL"，类似 Python 的
+   "dir()"，则返回当前 locals 的名字；这时如果没有活动的执行框架，则返
+   回 "NULL"，但 "PyErr_Occurred()" 将返回 false。
+
+PyObject *PyObject_GetIter(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI.*
+
+   等同于 Python 表达式 "iter(o)"。为对象参数返回一个新的迭代器，如果
+   该对象已经是一个迭代器，则返回对象本身。如果对象不能被迭代，会引发
+   "TypeError" ，并返回  "NULL"。
+
+PyObject *PyObject_GetAIter(PyObject *o)
+    *Return value: New reference.** Part of the Stable ABI since
+   version 3.10.*
+
+   等同于 Python 表达式 "aiter(o)"。接受一个 "AsyncIterable" 对象，并
+   为其返回一个 "AsyncIterator"。通常返回的是一个新迭代器，但如果参数
+   是一个 "AsyncIterator"，将返回其自身。如果该对象不能被迭代，会引发
+   "TypeError"，并返回 "NULL"。
+
+   3.10 新版功能.

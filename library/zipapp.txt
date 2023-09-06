@@ -1,0 +1,373 @@
+"zipapp" —— 管理可执行的 Python zip 打包文件
+********************************************
+
+3.5 新版功能.
+
+**源代码：** Lib/zipapp.py
+
+======================================================================
+
+本模块提供了一套管理工具，用于创建包含 Python 代码的压缩文件，这些文件
+可以 直接由 Python 解释器执行。 本模块提供 命令行接口 和 Python API。
+
+
+简单示例
+========
+
+下述例子展示了用 命令行接口 根据含有 Python 代码的目录创建一个可执行的
+打包文件。 运行后该打包文件时，将会执行 "myapp" 模块中的 "main" 函数。
+
+   $ python -m zipapp myapp -m "myapp:main"
+   $ python myapp.pyz
+   <output from myapp>
+
+
+命令行接口
+==========
+
+若要从命令行调用，则采用以下形式：
+
+   $ python -m zipapp source [options]
+
+如果 *source* 是个目录，将根据 *source* 的内容创建一个打包文件。如果
+*source* 是个文件，则应为一个打包文件，将会复制到目标打包文件中（如果
+指定了 -info 选项，将会显示 shebang 行的内容）。
+
+可以接受以下参数：
+
+-o <output>, --output=<output>
+
+   将程序的输出写入名为 *output* 的文件中。若未指定此参数，输出的文件
+   名将与输入的 *source* 相同，并添加扩展名 ".pyz"。如果显式给出了文件
+   名，将会原样使用（因此必要时应包含扩展名 ".pyz"）。
+
+   如果 *source* 是个打包文件，必须指定一个输出文件名（这时 *output*
+   必须与 *source* 不同）。
+
+-p <interpreter>, --python=<interpreter>
+
+   给打包文件加入 "#!" 行，以便指定 *解释器* 作为运行的命令行。另外，
+   还让打包文件在 POSIX 平台上可执行。默认不会写入  "#!" 行，也不让文
+   件可执行。
+
+-m <mainfn>, --main=<mainfn>
+
+   在打包文件中写入一个 "__main__.py" 文件，用于执行 *mainfn*。
+   *mainfn* 参数的形式应为 “pkg.mod:fn”，其中 “pkg.mod”是打包文件中的
+   某个包/模块，“fn”是该模块中的一个可调用对象。"__main__.py" 文件将会
+   执行该可调用对象。
+
+   在复制打包文件时，不能设置 "--main"  参数。
+
+-c, --compress
+
+   利用 deflate 方法压缩文件，减少输出文件的大小。默认情况下，打包文件
+   中的文件是不压缩的。
+
+   在复制打包文件时，"--compress" 无效。
+
+   3.7 新版功能.
+
+--info
+
+   显示嵌入在打包文件中的解释器程序，以便诊断问题。这时会忽略其他所有
+   参数，SOURCE 必须是个打包文件，而不是目录。
+
+-h, --help
+
+   打印简短的用法信息并退出。
+
+
+Python API
+==========
+
+该模块定义了两个快捷函数：
+
+zipapp.create_archive(source, target=None, interpreter=None, main=None, filter=None, compressed=False)
+
+   由 *source* 创建一个应用程序打包文件。source 可以是以下形式之一：
+
+   * 一个目录名，或指向目录的 *path-like object* ，这时将根据目录内容
+     新建一个应用程序打包文件。
+
+   * 一个已存在的应用程序打包文件名，或指向这类文件的 *path-like
+     object*，这时会将该文件复制为目标文件（会稍作修改以反映出
+     *interpreter* 参数的值）。必要时文件名中应包括 ".pyz" 扩展名。
+
+   * 一个以字节串模式打开的文件对象。该文件的内容应为应用程序打包文件
+     ，且假定文件对象定位于打包文件的初始位置。
+
+   *target* 参数定义了打包文件的写入位置：
+
+   * 若是个文件名，或是 *path-like object*，打包文件将写入该文件中。
+
+   * 若是个打开的文件对象，打包文件将写入该对象，该文件对象必须在字节
+     串写入模式下打开。
+
+   * 如果省略了 target （或为 "None"），则 source 必须为一个目录，
+     target  将是与 source 同名的文件，并加上 ".pyz" 扩展名。
+
+   参数 *interpreter* 指定了 Python 解释器程序名，用于执行打包文件。这
+   将以 “释伴（shebang）”行的形式写入打包文件的头部。在 POSIX 平台上，
+   操作系统会进行解释，而在 Windows 平台则会由 Python 启动器进行处理。
+   省略 *interpreter* 参数则不会写入释伴行。如果指定了解释器，且目标为
+   文件名，则会设置目标文件的可执行属性位。
+
+   参数 *main* 指定某个可调用程序的名称，用作打包文件的主程序。仅当
+   source 为目录且不含 "__main__.py" 文件时，才能指定该参数。*main* 参
+   数应采用 “pkg.module:callable”的形式，通过导入“pkg.module”并不带参
+   数地执行给出的可调用对象，即可执行打包文件。如果 source 是目录且不
+   含``__main__.py`` 文件，省略 *main* 将会出错，生成的打包文件将无法
+   执行。
+
+   可选参数 *filter* 指定了回调函数，将传给代表被添加文件路径的 Path
+   对象（相对于源目录）。如若文件需要加入打包文件，则回调函数应返回
+   "True"。
+
+   可选参数 *compressed* 指定是否要压缩打包文件。若设为 "True"，则打包
+   中的文件将用 deflate 方法进行压缩；否则就不会压缩。本参数在复制现有
+   打包文件时无效。
+
+   若 *source* 或 *target* 指定的是文件对象，则调用者有责任在调用
+   create_archive 之后关闭这些文件对象。
+
+   当复制已有的打包文件时，提供的文件对象只需 "read" 和 "readline" 方
+   法，或 "write" 方法。当由目录创建打包文件时，若目标为文件对象，将会
+   将其传给  类，且必须提供 "zipfile.ZipFile" 类所需的方法。
+
+   3.7 新版功能: 加入了 *filter* 和 *compressed* 参数。
+
+zipapp.get_interpreter(archive)
+
+   返回打包文件开头的  行指定的解释器程序。如果没有 "#!" 行，则返回
+   "None"。参数 *archive* 可为文件名或在字节串模式下打开以供读取的文件
+   类对象。"#!" 行假定是在打包文件的开头。
+
+
+例子
+====
+
+将目录打包成一个文件并运行它。
+
+   $ python -m zipapp myapp
+   $ python myapp.pyz
+   <output from myapp>
+
+同样还可用 "create_archive()" 函数完成：
+
+   >>> import zipapp
+   >>> zipapp.create_archive('myapp', 'myapp.pyz')
+
+要让应用程序能在 POSIX 平台上直接执行，需要指定所用的解释器。
+
+   $ python -m zipapp myapp -p "/usr/bin/env python"
+   $ ./myapp.pyz
+   <output from myapp>
+
+若要替换已有打包文件中的释伴行，请用 "create_archive()" 函数另建一个修
+改好的打包文件：
+
+   >>> import zipapp
+   >>> zipapp.create_archive('old_archive.pyz', 'new_archive.pyz', '/usr/bin/python3')
+
+To update the file in place, do the replacement in memory using a
+"BytesIO" object, and then overwrite the source afterwards.  Note that
+there is a risk when overwriting a file in place that an error will
+result in the loss of the original file.  This code does not protect
+against such errors, but production code should do so.  Also, this
+method will only work if the archive fits in memory:
+
+   >>> import zipapp
+   >>> import io
+   >>> temp = io.BytesIO()
+   >>> zipapp.create_archive('myapp.pyz', temp, '/usr/bin/python2')
+   >>> with open('myapp.pyz', 'wb') as f:
+   >>>     f.write(temp.getvalue())
+
+
+指定解释器程序
+==============
+
+注意，如果指定了解释器程序再发布应用程序打包文件，需要确保所用到的解释
+器是可移植的。Windows 的 Python 启动器支持大多数常见的 POSIX "#!" 行，
+但还需要考虑一些其他问题。
+
+* 如果采用“/usr/bin/env python”（或其他格式的 python 调用命令，比如
+  “/usr/bin/python”)，需要考虑默认版本既可能是 Python 2 又可能是
+  Python 3，应让代码在两个版本下均能正常运行。
+
+* 如果用到的 Python 版本明确，如“/usr/bin/env python3”，则没有该版本的
+  用户将无法运行应用程序。（如果代码不兼容 Python 2，可能正该如此）。
+
+* 因为无法指定“python X.Y以上版本”，所以应小心“/usr/bin/env python3.4”
+  这种精确版本的指定方式，因为对于 Python 3.5 的用户就得修改释伴行，比
+  如：
+
+通常应该用“/usr/bin/env python2”或“/usr/bin/env python3”的格式，具体根
+据代码适用于 Python 2 还是 3 而定。
+
+
+用 zipapp 创建独立运行的应用程序
+================================
+
+利用 "zipapp" 模块可以创建独立运行的 Python 程序，以便向最终用户发布，
+仅需在系统中装有合适版本的 Python 即可运行。操作的关键就是把应用程序代
+码和所有依赖项一起放入打包文件中。
+
+创建独立运行打包文件的步骤如下：
+
+1. 照常在某个目录中创建应用程序，于是会有一个 "myapp" 目录，里面有个
+   ``__main__.py`` 文件，以及所有支持性代码。
+
+2. 用 pip 将应用程序的所有依赖项装入 "myapp" 目录。
+
+      $ python -m pip install -r requirements.txt --target myapp
+
+   （这里假定在 "requirements.txt" 文件中列出了项目所需的依赖项，也可
+   以在 pip 命令行中列出依赖项）。
+
+3. pip 在 "myapp" 中创建的 ".dist-info" 目录，是可以删除的。这些目录保
+   存了 pip 用于管理包的元数据，由于接下来不会再用到 pip，所以不是必须
+   存在，当然留下来也不会有什么坏处。
+
+4. 用以下命令打包：
+
+      $ python -m zipapp -p "interpreter" myapp
+
+这会生成一个独立的可执行文件，可在任何装有合适解释器的机器上运行。详情
+参见 指定解释器程序。可以单个文件的形式分发给用户。
+
+在 Unix 系统中，"myapp.pyz" 文件将以原有文件名执行。如果喜欢 “普通”的
+命令名，可以重命名该文件，去掉扩展名 ".pyz" 。在 Windows 系统中，
+"myapp.pyz[w]" 是可执行文件，因为 Python 解释器在安装时注册了扩展名
+``.pyz`` 和 ".pyzw" 。
+
+
+制作 Windows 可执行文件
+-----------------------
+
+在 Windows 系统中，可能没有注册扩展名 ".pyz"，另外有些场合无法“透明”地
+识别已注册的扩展（最简单的例子是，"subprocess.run(['myapp'])" 就找不到
+——需要明确指定扩展名）。
+
+因此，在 Windows 系统中，通常最好 由zipapp 创建一个可执行文件。虽然需
+要用到 C 编译器，但还是相对容易做到的。基本做法有赖于以下事实，即 zip
+文件内可预置任意数据，Windows 的 exe 文件也可以附带任意数据。因此，创
+建一个合适的启动程序并将 ".pyz" 文件附在后面，最后就能得到一个单文件的
+可执行文件，可运行 Python 应用程序。
+
+合适的启动程序可以简单如下：
+
+   #define Py_LIMITED_API 1
+   #include "Python.h"
+
+   #define WIN32_LEAN_AND_MEAN
+   #include <windows.h>
+
+   #ifdef WINDOWS
+   int WINAPI wWinMain(
+       HINSTANCE hInstance,      /* handle to current instance */
+       HINSTANCE hPrevInstance,  /* handle to previous instance */
+       LPWSTR lpCmdLine,         /* pointer to command line */
+       int nCmdShow              /* show state of window */
+   )
+   #else
+   int wmain()
+   #endif
+   {
+       wchar_t **myargv = _alloca((__argc + 1) * sizeof(wchar_t*));
+       myargv[0] = __wargv[0];
+       memcpy(myargv + 1, __wargv, __argc * sizeof(wchar_t *));
+       return Py_Main(__argc+1, myargv);
+   }
+
+若已定义了预处理器符号 "WINDOWS"，上述代码将会生成一个 GUI 可执行文件
+。若未定义则生成一个可执行的控制台文件。
+
+直接使用标准的 MSVC 命令行工具，或利用 distutils 知道如何编译 Python
+源代码，即可编译可执行文件：
+
+   >>> from distutils.ccompiler import new_compiler
+   >>> import distutils.sysconfig
+   >>> import sys
+   >>> import os
+   >>> from pathlib import Path
+
+   >>> def compile(src):
+   >>>     src = Path(src)
+   >>>     cc = new_compiler()
+   >>>     exe = src.stem
+   >>>     cc.add_include_dir(distutils.sysconfig.get_python_inc())
+   >>>     cc.add_library_dir(os.path.join(sys.base_exec_prefix, 'libs'))
+   >>>     # First the CLI executable
+   >>>     objs = cc.compile([str(src)])
+   >>>     cc.link_executable(objs, exe)
+   >>>     # Now the GUI executable
+   >>>     cc.define_macro('WINDOWS')
+   >>>     objs = cc.compile([str(src)])
+   >>>     cc.link_executable(objs, exe + 'w')
+
+   >>> if __name__ == "__main__":
+   >>>     compile("zastub.c")
+
+生成的启动程序用到了 “受限 ABI”，所以可在任意版本的 Python 3.x 中运行
+。只要用户的 "PATH" 中包含了 Python（"python3.dll"）路径即可。
+
+若要得到完全独立运行的发行版程序，可将附有应用程序的启动程序，与“内嵌
+版” Python 打包在一起即可。这样在架构匹配（32位或64位）的任一 PC 上都
+能运行。
+
+
+注意事项
+--------
+
+要将应用程序打包为单个文件，存在一些限制。大多数情况下，无需对应用程序
+进行重大修改即可解决。
+
+1. 如果应用程序依赖某个带有 C 扩展的包，则此程序包无法由打包文件运行（
+   这是操作系统的限制，因为可执行代码必须存在于文件系统中，操作系统才
+   能加载）。这时可去除打包文件中的依赖关系，然后要求用户事先安装好该
+   程序包，或者与打包文件一起发布并在 "__main__.py" 中增加代码，将未打
+   包模块的目录加入 "sys.path" 中。采用增加代码方式时，一定要为目标架
+   构提供合适的二进制文件（可能还需在运行时根据用户的机器选择正确的版
+   本加入 "sys.path"）。
+
+2. 若要如上所述发布一个 Windows 可执行文件，就得确保用户在 PATH 中包含
+   ``python3.dll`` 的路径（安装程序默认不会如此），或者应把应用程序与
+   内嵌版 Python 一起打包。
+
+3. 上述给出的启动程序采用了 Python 嵌入 API。 这意味着应用程序将会是
+   "sys.executable" ，而*不是*传统的 Python 解释器。代码及依赖项需做好
+   准备。例如，如果应用程序用到了 "multiprocessing" 模块，就需要调用
+   "multiprocessing.set_executable()" 来让模块知道标准 Python 解释器的
+   位置。
+
+
+Python 打包应用程序的格式
+=========================
+
+自 2.6 版开始，Python 即能够执行包含  文件的打包文件了。为了能被
+Python 执行，应用程序的打包文件必须为包含 "__main__.py" 文件的标准 zip
+文件，"__main__.py" 文件将作为应用程序的入口运行。类似于常规的 Python
+脚本，父级（这里指打包文件）将放入 "sys.path" ，因此可从打包文件中导入
+更多的模块。
+
+zip 文件格式允许在文件中预置任意数据。利用这种能力，zip 应用程序格式在
+文件中预置了一个标准的 POSIX “释伴”行（"#!/path/to/interpreter"）。
+
+因此，Python zip 应用程序的格式会如下所示：
+
+1. 可选的释伴行，包含字符 "b'#!'"，后面是解释器名，然后是换行符 （
+   "b'\n'"）。 解释器名可为操作系统 “释伴”处理所能接受的任意值，或为
+   Windows 系统中的 Python 启动程序。解释器名在 Windows 中应用 UTF-8
+   编码，在 POSIX 中则用 "sys.getfilesystemencoding()"。
+
+2. 标准的打包文件由 "zipfile" 模块生成。其中 *必须* 包含一个名为
+   ``__main__.py`` 的文件（必须位于打包文件的“根”目录——不能位于某个子
+   目录中）。打包文件中的数据可以是压缩或未压缩的。
+
+如果应用程序的打包文件带有释伴行，则在 POSIX 系统中可能需要启用可执行
+属性，以允许直接执行。
+
+不一定非要用本模块中的工具创建应用程序打包文件，本模块只是提供了便捷方
+案，上述格式的打包文件可用任何方式创建，均可被 Python 接受。

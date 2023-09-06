@@ -1,0 +1,60 @@
+"codeop" --- 编译Python代码
+***************************
+
+**源代码：** Lib/codeop.py
+
+======================================================================
+
+"codeop" 模块提供了可以模拟Python读取-执行-打印循环的实用程序，就像在
+"code" 模块中一样。因此，您可能不希望直接使用该模块；如果你想在程序中
+包含这样一个循环，你可能需要使用 "code" 模块。
+
+这个任务有两个部分:
+
+1. Being able to tell if a line of input completes a Python statement:
+   in short, telling whether to print '">>>"' or '"..."' next.
+
+2. Remembering which future statements the user has entered, so
+   subsequent input can be compiled with these in effect.
+
+"codeop" 模块提供了分别以及同时执行这两个部分的方式。
+
+只执行前一部分：
+
+codeop.compile_command(source, filename='<input>', symbol='single')
+
+   Tries to compile *source*, which should be a string of Python code
+   and return a code object if *source* is valid Python code.  In that
+   case, the filename attribute of the code object will be *filename*,
+   which defaults to "'<input>'".  Returns "None" if *source* is *not*
+   valid Python code, but is a prefix of valid Python code.
+
+   如果 *source* 存在问题，将引发异常。 如果存在无效的 Python 语法将引
+   发 "SyntaxError"，而如果存在无效的字面值则将引发 "OverflowError" 或
+   "ValueError"。
+
+   The *symbol* argument determines whether *source* is compiled as a
+   statement ("'single'", the default), as a sequence of *statement*
+   ("'exec'") or as an *expression* ("'eval'").  Any other value will
+   cause "ValueError" to be raised.
+
+   注解:
+
+     解析器有可能（但很不常见）会在到达源码结尾之前停止解析并成功输出
+     结果；在这种情况下，末尾的符号可能会被忽略而不是引发错误。 例如，
+     一个反斜杠加两个换行符之后可以跟随任何无意义的符号。 一旦解析器
+     API 得到改进将修正这个问题。
+
+class codeop.Compile
+
+   这个类的实例具有 "__call__()" 方法，其签名与内置函数 "compile()" 相
+   似，区别在于如果该实例编译了包含 "__future__" 语句的程序文本，则实
+   例会‘记住’并使用已生效的语句编译所有后续程序文本。
+
+class codeop.CommandCompiler
+
+   Instances of this class have "__call__()" methods identical in
+   signature to "compile_command()"; the difference is that if the
+   instance compiles program text containing a "__future__" statement,
+   the instance 'remembers' and compiles all subsequent program texts
+   with the statement in force.

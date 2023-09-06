@@ -1,0 +1,225 @@
+被取代的模块
+************
+
+本章中描述的模块均已弃用，仅保留用于向后兼容。 它们已经被其他模块所取
+代。
+
+* "aifc" --- 读写 AIFF 和 AIFC 文件
+
+* "asynchat" --- 异步套接字指令/响应处理程序
+
+  * asynchat 示例
+
+* "asyncore" --- 异步套接字处理器
+
+  * asyncore 示例基本 HTTP 客户端
+
+  * asyncore 示例基本回显服务器
+
+* "audioop" --- 处理原始音频数据
+
+* "cgi" --- 通用网关接口支持
+
+  * 概述
+
+  * 使用 cgi 模块
+
+  * 更高层级的接口
+
+  * 函数
+
+  * 对于安全性的关注
+
+  * 在 Unix 系统上安装你的 CGI 脚本
+
+  * 测试你的 CGI 脚本
+
+  * 调试 CGI 脚本
+
+  * 常见问题和解决方案
+
+* "cgitb" --- 用于 CGI 脚本的回溯管理器
+
+* "chunk" --- 读取 IFF 分块数据
+
+* "crypt" —— 验证 Unix 口令的函数
+
+  * 哈希方法
+
+  * 模块属性
+
+  * 模块函数
+
+  * 例子
+
+* "imghdr" --- 推测图像类型
+
+* "imp" —— 由代码内部访问 *import* 。
+
+  * 例子
+
+* "mailcap" --- Mailcap 文件处理
+
+* "msilib" --- 读写 Microsoft Installer 文件
+
+  * Database Objects
+
+  * View Objects
+
+  * Summary Information Objects
+
+  * Record Objects
+
+  * Errors
+
+  * CAB Objects
+
+  * Directory Objects
+
+  * 相关特性
+
+  * GUI classes
+
+  * Precomputed tables
+
+* "nis" --- Sun 的 NIS (黄页) 接口
+
+* "nntplib" --- NNTP 协议客户端
+
+  * NNTP 对象
+
+    * 属性
+
+    * 方法
+
+  * 工具函数
+
+* "optparse" --- 命令行选项的解析器
+
+  * 背景
+
+    * 术语
+
+    * What are options for?
+
+    * 位置参数有什么用？
+
+  * 教程
+
+    * Understanding option actions
+
+    * The store action
+
+    * Handling boolean (flag) options
+
+    * Other actions
+
+    * 默认值
+
+    * Generating help
+
+      * Grouping Options
+
+    * Printing a version string
+
+    * How "optparse" handles errors
+
+    * Putting it all together
+
+  * 参考指南
+
+    * 创建解析器
+
+    * 填充解析器
+
+    * 定义选项
+
+    * Option attributes
+
+    * Standard option actions
+
+    * Standard option types
+
+    * 解析参数
+
+    * Querying and manipulating your option parser
+
+    * Conflicts between options
+
+    * 清理
+
+    * Other methods
+
+  * Option Callbacks
+
+    * Defining a callback option
+
+    * How callbacks are called
+
+    * Raising errors in a callback
+
+    * Callback example 1: trivial callback
+
+    * Callback example 2: check option order
+
+    * Callback example 3: check option order (generalized)
+
+    * Callback example 4: check arbitrary condition
+
+    * Callback example 5: fixed arguments
+
+    * Callback example 6: variable arguments
+
+  * Extending "optparse"
+
+    * Adding new types
+
+    * Adding new actions
+
+* "ossaudiodev"  --- 访问兼容OSS的音频设备
+
+  * 音频设备对象
+
+  * 混音器设备对象
+
+* "pipes" --- 终端管道接口
+
+  * 模板对象
+
+* "smtpd" --- SMTP 服务器
+
+  * SMTPServer 对象
+
+  * DebuggingServer 对象
+
+  * PureProxy 对象
+
+  * MailmanProxy 对象
+
+  * SMTPChannel 对象
+
+* "sndhdr" --- 推测声音文件的类型
+
+* "spwd" —— shadow 密码库
+
+* "sunau" --- 读写 Sun AU 文件
+
+  * AU_read 对象
+
+  * AU_write 对象
+
+* "telnetlib" -- Telnet 客户端
+
+  * Telnet 对象
+
+  * Telnet 示例
+
+* "uu" --- 对 uuencode 文件进行编码与解码
+
+* "xdrlib" --- 编码与解码 XDR 数据
+
+  * Packer 对象
+
+  * Unpacker 对象
+
+  * 异常

@@ -1,0 +1,82 @@
+"pydoc" --- 文档生成器和在线帮助系统
+************************************
+
+**源代码:** Lib/pydoc.py
+
+======================================================================
+
+"pydoc" 模块会根据 Python 模块来自动生成文档。 生成的文档可在控制台中
+显示为文本页面，提供给 Web 浏览器访问或者保存为 HTML 文件。
+
+对于模块、类、函数和方法，显示的文档内容取自文档字符串（即 "__doc__"
+属性），并会递归地从其带文档的成员中获取。 如果没有文档字符串，"pydoc"
+会尝试从类、函数或方法定义上方，或是模块顶部的注释行段落获取 (参见
+"inspect.getcomments()").
+
+内置函数 "help()" 会发起调用交互式解释器的在线帮助系统，该系统使用
+"pydoc" 在终端上生成文本形式的文档内容。 同样的文本文档也可以在 Python
+解释器以外通过在操作系统的命令提示符下以脚本方式运行 **pydoc** 来查看
+。 例如，运行
+
+   python -m pydoc sys
+
+在终端提示符下将通过 "sys" 模块显示文档内容，其样式类似于 Unix **man**
+命令所显示的指南页面。 **pydoc** 的参数可以为函数、模块、包，或带点号
+的对模块中的类、方法或函数以及包中的模块的引用。 如果传给 **pydoc** 的
+参数像是一个路径（即包含所在操作系统的路径分隔符，例如 Unix 的正斜杠）
+，并且其指向一个现有的 Python 源文件，则会为该文件生成文档内容。
+
+注解:
+
+  为了找到对象及其文档内容，"pydoc" 会导入文档所在的模块。 因此，任何
+  模块层级的代码都将被执行。 请使用 "if __name__ == '__main__':" 语句
+  来确保一个文件的特定代码仅在作为脚本被发起调用时执行而不是在被导入时
+  执行。
+
+当打印输出到控制台时，**pydoc** 会尝试对输出进行分页以方便阅读。 如果
+设置了 "PAGER" 环境变量，**pydoc** 将使用该变量值作为分页程序。
+
+在参数前指定 "-w" 旗标将把 HTML 文档写入到当前目录下的一个文件中，而不
+是在控制台中显示文本。
+
+在参数前指定 "-k" 旗标将在全部可用模块的提要行中搜索参数所给定的关键字
+，具体方式同样类似于 Unix **man** 命令。 模块的提要行就是其文档字符串
+的第一行。
+
+You can also use **pydoc** to start an HTTP server on the local
+machine that will serve documentation to visiting web browsers.
+**python -m pydoc -p 1234** will start a HTTP server on port 1234,
+allowing you to browse the documentation at "http://localhost:1234/"
+in your preferred web browser. Specifying "0" as the port number will
+select an arbitrary unused port.
+
+**python -m pydoc -n <hostname>** will start the server listening at
+the given hostname.  By default the hostname is 'localhost' but if you
+want the server to be reached from other machines, you may want to
+change the host name that the server responds to.  During development
+this is especially useful if you want to run pydoc from within a
+container.
+
+**python -m pydoc -b** will start the server and additionally open a
+web browser to a module index page.  Each served page has a navigation
+bar at the top where you can *Get* help on an individual item,
+*Search* all modules with a keyword in their synopsis line, and go to
+the *Module index*, *Topics* and *Keywords* pages.
+
+当 **pydoc** 生成文档内容时，它会使用当前环境和路径来定位模块。 因此，
+发起调用 **pydoc spam** 得到的文档版本会与你启动 Python 解释器并输入
+"import spam" 时得到的模块版本完全相同。
+
+核心模块的模块文档位置对应于 "https://docs.python.org/X.Y/library/" 其
+中 "X" 和 "Y" 是 Python 解释器的主要版本号和小版本号。 这可通过设置
+"PYTHONDOCS" 环境变量来重载为指向不同的 URL 或包含 Library Reference
+Manual 页面的本地目录。
+
+在 3.2 版更改: 添加 "-b" 选项。
+
+在 3.3 版更改: 命令行选项 "-g" 已经移除。
+
+在 3.4 版更改: "pydoc" 现在会使用 "inspect.signature()" 而非
+"inspect.getfullargspec()" 来从可调用对象中提取签名信息。
+
+在 3.7 版更改: 添加 "-n" 选项。

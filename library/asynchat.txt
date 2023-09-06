@@ -1,0 +1,171 @@
+"asynchat" --- 异步套接字指令/响应处理程序
+******************************************
+
+**源代码:** Lib/asynchat.py
+
+3.6 版后已移除: "asynchat" 将在 Python 3.12 版被移除（请参阅 **PEP
+594** 了解详情）。 请改用 "asyncio"。
+
+======================================================================
+
+注解:
+
+  该模块仅为提供向后兼容。我们推荐在新代码中使用 "asyncio" 。
+
+此模块在 "asyncore" 框架之上构建，简化了异步客户端和服务器并使得处理元
+素为以任意字符串结束或者为可变长度的协议更加容易。 "asynchat" 定义了一
+个可以由你来子类化的抽象类 "async_chat"，提供了
+"collect_incoming_data()" 和 "found_terminator()" 等方法的实现。 它使
+用与 "asyncore" 相同的异步循环，并且可以在通道映射中自由地混合
+"asyncore.dispatcher" 和 "asynchat.async_chat" 这两种类型的通道。 一般
+来说 "asyncore.dispatcher" 服务器通道在接收到传入的连接请求时会生成新
+的 "asynchat.async_chat" 通道对象。
+
+class asynchat.async_chat
+
+   这个类是 "asyncore.dispatcher" 的抽象子类。 对于实际使用的代码你必
+   须子类化 "async_chat"，提供有意义的 "collect_incoming_data()" 和
+   "found_terminator()" 方法。 "asyncore.dispatcher" 的方法也可以被使
+   用，但它们在消息/响应上下文中并不是全都有意义。
+
+   与 "asyncore.dispatcher" 类似，"async_chat" 也定义了一组通过对
+   "select()" 调用之后的套接字条件进行分析所生成的事件。 一旦启动轮询
+   循环 "async_chat" 对象的方法就会被事件处理框架调用而无须程序员方面
+   做任何操作。
+
+   两个可被修改的类属性，用以提升性能，甚至也可能会节省内存。
+
+   ac_in_buffer_size
+
+      异步输入缓冲区大小 (默认为 "4096")。
+
+   ac_out_buffer_size
+
+      异步输出缓冲区大小 (默认为 "4096")。
+
+   与 "asyncore.dispatcher" 不同，"async_chat" 允许你定义一个 FIFO (先
+   进先出) 队列 *producers*。 其中的生产者只需要一个方法 "more()"，该
+   方法应当返回要在通道上传输的数据。 生产者通过让其 "more()" 方法返回
+   空字节串对象来表明其处于耗尽状态 (*意即* 它已不再包含数据)。 此时
+   "async_chat" 对象会将该生产者从队列中移除并开始使用下一个生产者，如
+   果有下一个的话。 当生产者队列为空时 "handle_write()" 方法将不执行任
+   何操作。 你要使用通道对象的 "set_terminator()" 方法来描述如何识别来
+   自远程端点的入站传输的结束或是重要的中断点。
+
+   要构建一个可用的 "async_chat" 子类，你的输入方法
+   "collect_incoming_data()" 和 "found_terminator()" 必须要处理通道异
+   步接收的数据。 这些参数的描述见下文。
+
+async_chat.close_when_done()
+
+   将 "None" 推入生产者队列。 当此生产者被弹出队列时它将导致通道被关闭
+   。
+
+async_chat.collect_incoming_data(data)
+
+   调用时附带 *data*，其中包含任意数量的已接收数据。 必须被重载的默认
+   方法将引发一个 "NotImplementedError" 异常。
+
+async_chat.discard_buffers()
+
+   在紧急情况下此方法将丢弃输入和/或输出缓冲区以及生产者队列中的任何数
+   据。
+
+async_chat.found_terminator()
+
+   当输入数据流能匹配 "set_terminator()" 所设定的终结条件时会被调用。
+   必须被重载的默认方法将引发一个 "NotImplementedError" 异常。 被缓冲
+   的输入数据应当可以通过实例属性来获取。
+
+async_chat.get_terminator()
+
+   返回通道的当前终结器。
+
+async_chat.push(data)
+
+   将数据推入通道的队列以确保其被传输。 要让通道将数据写到网络中你只需
+   要这样做就足够了，虽然以更复杂的方式使用你自己的生产者也是有可能的
+   ，例如为了实现加密和分块。
+
+async_chat.push_with_producer(producer)
+
+   Takes a producer object and adds it to the producer queue
+   associated with the channel.  When all currently pushed producers
+   have been exhausted the channel will consume this producer's data
+   by calling its "more()" method and send the data to the remote
+   endpoint.
+
+async_chat.set_terminator(term)
+
+   设置可在通道上被识别的终结条件。 "term" 可以是三种类型值中的任意一
+   种 ，对应于处理入站协议数据的三种不同方式。
+
+   +-------------+-----------------------------------------------+
+   | term        | 描述                                          |
+   |=============|===============================================|
+   | *string*    | 当在输入流中发现该字符串时将会调用            |
+   |             | "found_terminator()"                          |
+   +-------------+-----------------------------------------------+
+   | *integer*   | 当接收到指定数量的字符时将会调用              |
+   |             | "found_terminator()"                          |
+   +-------------+-----------------------------------------------+
+   | "None"      | 通道会不断地持续收集数据                      |
+   +-------------+-----------------------------------------------+
+
+   请注意终结器之后的任何数据将可在 "found_terminator()" 被调用后由通
+   道来读取。
+
+
+asynchat 示例
+=============
+
+下面的例子片段显示了如何通过 "async_chat" 来读取 HTTP 请求。 Web 服务
+器可以为每个入站的客户端连接创建 "http_request_handler" 对象。 请注意
+在初始时通道终结器会被设置为匹配 HTTP 标头末尾的空行，并且会用一个旗标
+来指明标头正在被读取。
+
+一旦完成了标头的读取，如果请求类型为 POST (表明输入流中存在更多的数据)
+则会使用 "Content-Length:" 标头来设置一个数值终结器以从通道读取适当数
+量的数据。
+
+一旦完成了对所有相关输入的处理，将会在设置通道终结器为 "None" 以确保忽
+略掉 Web 客户端所发送的任何无关数据之后调用 "handle_request()" 方法。
+
+   import asynchat
+
+   class http_request_handler(asynchat.async_chat):
+
+       def __init__(self, sock, addr, sessions, log):
+           asynchat.async_chat.__init__(self, sock=sock)
+           self.addr = addr
+           self.sessions = sessions
+           self.ibuffer = []
+           self.obuffer = b""
+           self.set_terminator(b"\r\n\r\n")
+           self.reading_headers = True
+           self.handling = False
+           self.cgi_data = None
+           self.log = log
+
+       def collect_incoming_data(self, data):
+           """Buffer the data"""
+           self.ibuffer.append(data)
+
+       def found_terminator(self):
+           if self.reading_headers:
+               self.reading_headers = False
+               self.parse_headers(b"".join(self.ibuffer))
+               self.ibuffer = []
+               if self.op.upper() == b"POST":
+                   clen = self.headers.getheader("content-length")
+                   self.set_terminator(int(clen))
+               else:
+                   self.handling = True
+                   self.set_terminator(None)
+                   self.handle_request()
+           elif not self.handling:
+               self.set_terminator(None)  # browsers sometimes over-send
+               self.cgi_data = parse(self.headers, b"".join(self.ibuffer))
+               self.handling = True
+               self.ibuffer = []
+               self.handle_request()

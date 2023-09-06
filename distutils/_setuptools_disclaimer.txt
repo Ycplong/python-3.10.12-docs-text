@@ -1,0 +1,6 @@
+注解:
+
+  这篇文档是历史遗留文档，在
+  https://setuptools.readthedocs.io/en/latest/setuptools.html 上的
+  "setuptools" 文档独立涵盖此处包含的所有相关信息之后，将不再单独作为
+  正式文档保留。

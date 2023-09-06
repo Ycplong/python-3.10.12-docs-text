@@ -1,0 +1,243 @@
+"smtpd" --- SMTP 服务器
+***********************
+
+**源代码:** Lib/smtpd.py
+
+======================================================================
+
+该模块提供了几个类来实现 SMTP （电子邮件）服务器。
+
+3.6 版后已移除: "smtpd" 将在 Python 3.12 中移除（请参阅 **PEP 594** 了
+解详情）。 aiosmtpd 包是这个模块的推荐替代品。 它基于 "asyncio" 并提供
+了更简洁直观的 API。
+
+有几个服务器的实现；一个是通用的无为实现，可以被重写，而另外两个则提供
+特定的邮件发送策略。
+
+此外， SMTPChannel 可以被扩展以实现与 SMTP 客户端非常具体的交互行为。
+
+该代码支持 **RFC 5321** ，加上 **RFC 1870** SIZE和 **RFC 6531**
+SMTPUTF8 扩展。
+
+
+SMTPServer 对象
+===============
+
+class smtpd.SMTPServer(localaddr, remoteaddr, data_size_limit=33554432, map=None, enable_SMTPUTF8=False, decode_data=False)
+
+   新建一个 "SMTPServer" 对象，它会绑定到本机地址 *localaddr*。 它将把
+   *remoteaddr* 当作上游 SMTP 中继器。 *localaddr* 和 *remoteaddr* 都
+   应当是 (host, port) 元组。 该对象继承自 "asyncore.dispatcher"，因而
+   会在实例化时将自己插入到 "asyncore" 的事件循环。
+
+   *data_size_limit* 指定将在 "DATA" 命令中被接受的最大字节数。 值为
+   "None" 或 "0" 表示无限制。
+
+   *map* 是用于连接的套接字映射（初始为空的字典是适当的值）。 如果未指
+   定则会使用 "asyncore" 全局套接字映射。
+
+   *enable_SMTPUTF8* 决定是否应当启用 "SMTPUTF8" 扩展（如 **RFC 6531**
+   所定义的。 默认值为 "False"。 当设为 "True" 时，会接受 "SMTPUTF8"
+   作为 "MAIL" 命令的形参并在被提供时将其传给 "kwargs['mail_options']"
+   列表中的 "process_message()"。 *decode_data* 和 *enable_SMTPUTF8*
+   不可同时被设为 "True"。
+
+   *decode_data* 指明 SMTP 事务的数据部分是否应当使用 UTF-8 来解码。
+   当 *decode_data* 为 "False" 时（默认值），服务器会声明 "8BITMIME"
+   扩展 (**RFC 6152**)，接受来自 "MAIL" 命令的 "BODY=8BITMIME" 形参，
+   并在该形参存在时将其传给 "kwargs['mail_options']" 列表中的
+   "process_message()" 方法。 *decode_data* 和 *enable_SMTPUTF8* 不可
+   同时被设为 "True"。
+
+   process_message(peer, mailfrom, rcpttos, data, **kwargs)
+
+      引发 "NotImplementedError" 异常。 请在子类中重载此方法以实际运用
+      此消息。 在构造器中作为 *remoteaddr* 传入的任何东西都可以
+      "_remoteaddr" 属性的形式来访问。 *peer* 是远程主机的地址，
+      *mailfrom* 是封包的发送方，*rcpttos* 是封包的接收方而 *data* 是
+      包含电子邮件内容的字符串（应该为 **RFC 5321** 格式）。
+
+      如果构造器关键字参数 *decode_data* 被设为 "True"，则 *data* 参数
+      将为 Unicode 字符串。 如果被设为 "False"，则将为字节串对象。
+
+      *kwargs* 是包含附加信息的字典。 如果给出 "decode_data=True" 作为
+      初始参数则该字典为空，否则它会包含以下的键:
+
+         *mail_options*:
+            由 "MAIL" 命令所接收的所有参数组成的列表 (其元素为大写形式
+            的字符串；例如: "['BODY=8BITMIME', 'SMTPUTF8']")。
+
+         *rcpt_options*:
+            与 *mail_options* 类似但是针对 "RCPT" 命令。 目前不支持任
+            何 "RCPT TO" 选项，因此其值将总是为空列表。
+
+      "process_message" 的实现应当使用 "**kwargs" 签名来接收任意关键字
+      参数，因为未来的增强特性可能会向 kwargs 字典添加新键。
+
+      返回 "None" 以请求一个正常的 "250 Ok" 响应；在其他情况下则以
+      **RFC 5321** 格式返回所需的响应字符串。
+
+   channel_class
+
+      重载这个子类以使用自定义的 "SMTPChannel" 来管理 SMTP 客户端。
+
+   3.4 新版功能: *map* 构造器参数。
+
+   在 3.5 版更改: *localaddr* 和 *remoteaddr* 现在可以包含 IPv6 地址。
+
+   3.5 新版功能: *decode_data* 和 *enable_SMTPUTF8* 构造器形参，以及当
+   *decode_data* 为 "False" 时传给 "process_message()" 的 *kwargs* 形
+   参。
+
+   在 3.6 版更改: *decode_data* 现在默认为 "False"。
+
+
+DebuggingServer 对象
+====================
+
+class smtpd.DebuggingServer(localaddr, remoteaddr)
+
+   创建一个新的调试服务器。 参数是针对每个 "SMTPServer"。 消息将被丢弃
+   ，并在 stdout 上打印出来。
+
+
+PureProxy 对象
+==============
+
+class smtpd.PureProxy(localaddr, remoteaddr)
+
+   创建一个新的纯代理服务器。 参数是针对每个 "SMTPServer"。 一切都将被
+   转发到 *remoteaddr*。 请注意运行此对象有很大的机会令你成为一个开放
+   的中继站，所以需要小心。
+
+
+MailmanProxy 对象
+=================
+
+class smtpd.MailmanProxy(localaddr, remoteaddr)
+
+   从版本 3.9 开始标记为过时，将在版本 3.11 中移除。: "MailmanProxy"
+   已被弃用，它依赖于一个已不存在的 "Mailman" 模块因而本来就不再可用了
+   。
+
+   创建一个新的纯代理服务器。 参数是针对每个 "SMTPServer"。 一切都将被
+   转发到 *remoteaddr*，除非本地 mailman 配置知道另一个地址，在那种情
+   况下它将由 mailman 来处理。 请注意运行此对象有很大的机会令你成为一
+   个开放的中继站，所以需要小心。
+
+
+SMTPChannel 对象
+================
+
+class smtpd.SMTPChannel(server, conn, addr, data_size_limit=33554432, map=None, enable_SMTPUTF8=False, decode_data=False)
+
+   创建一个新的 "SMTPChannel" 对象，该对象会管理服务器和单个 SMTP 客户
+   端之间的通信。
+
+   *conn* 和 *addr* 是针对下述的每个实例变量。
+
+   *data_size_limit* 指定将在 "DATA" 命令中被接受的最大字节数。 值为
+   "None" 或 "0" 表示无限制。
+
+   *enable_SMTPUTF8* 确定 "SMTPUTF8" 扩展 (如 **RFC 6531** 所定义的)
+   是否应当被启用。 默认值为 "False"。 *decode_data* 和
+   *enable_SMTPUTF8* 不能被同时设为 "True"。
+
+   可以在 *map* 中指定一个字典以避免使用全局套接字映射。
+
+   *decode_data* 指明 SMTP 事务的数据部分是否应当使用 UTF-8 来解码。
+   默认值为 "False"。 *decode_data* 和 *enable_SMTPUTF8* 不能被同时设
+   为 "True"。
+
+   要使用自定义的 SMTPChannel 实现你必须重载你的 "SMTPServer" 的
+   "SMTPServer.channel_class"。
+
+   在 3.5 版更改: 添加了 *decode_data* 和 *enable_SMTPUTF8* 形参。
+
+   在 3.6 版更改: *decode_data* 现在默认为 "False"。
+
+   "SMTPChannel" 具有下列实例变量:
+
+   smtp_server
+
+      存放生成此通道的 "SMTPServer"。
+
+   conn
+
+      存放连接到客户端的套接字对象。
+
+   addr
+
+      存放客户端的地址，"socket.accept" 所返回的第二个值。
+
+   received_lines
+
+      存放从客户端接收的行字符串列表 (使用 UTF-8 解码)。 所有行的
+      ""\r\n"" 行结束符都会被转写为 ""\n""。
+
+   smtp_state
+
+      存放通道的当前状态。 其初始值将为 "COMMAND" 而在客户端发送
+      "DATA" 行后将为 "DATA"。
+
+   seen_greeting
+
+      存放包含客户端在其 "HELO" 中发送的问候信息的字符串。
+
+   mailfrom
+
+      存放包含客户端在 "MAIL FROM:" 行中标识的地址的字符串。
+
+   rcpttos
+
+      存放包含客户端在 "RCPT TO:" 行中标识的地址的字符串。
+
+   received_data
+
+      存放客户端在 DATA 状态期间发送的所有数据的字符串，直至但不包括末
+      尾的 ""\r\n.\r\n""。
+
+   fqdn
+
+      Holds the fully qualified domain name of the server as returned
+      by "socket.getfqdn()".
+
+   peer
+
+      存放由 "conn.getpeername()" 所返回的客户端对等方名称，其中
+      "conn" 为 "conn"。
+
+   "SMTPChannel" 在接收到来自客户端的命令行时会通过发起调用名为
+   "smtp_<command>" 的方法来进行操作。 在基类 "SMTPChannel" 中具有用于
+   处理下列命令（并对他们作出适当反应）的方法:
+
+   +----------+---------------------------------------------------------------------+
+   | 命令     | 所采取的行动                                                        |
+   |==========|=====================================================================|
+   | HELO     | 接受来自客户端的问候语，并将其存储在 "seen_greeting" 中。将服务器设 |
+   |          | 置为基本命令模式。                                                  |
+   +----------+---------------------------------------------------------------------+
+   | EHLO     | 接受来自客户的问候并将其存储在 "seen_greeting" 中。将服务器设置为扩 |
+   |          | 展命令模式。                                                        |
+   +----------+---------------------------------------------------------------------+
+   | NOOP     | 不采取任何行动。                                                    |
+   +----------+---------------------------------------------------------------------+
+   | QUIT     | 干净地关闭连接。                                                    |
+   +----------+---------------------------------------------------------------------+
+   | MAIL     | 接受 "MAIL FROM:" 句法并将所提供的地址保存为 "mailfrom"。 在扩展命  |
+   |          | 令模式下，还接受 **RFC 1870** SIZE 属性并根据 *data_size_limit* 的  |
+   |          | 值作出适当返应。                                                    |
+   +----------+---------------------------------------------------------------------+
+   | RCPT     | 接受 "RCPT TO:" 句法并将所提供的地址保存在 "rcpttos" 列表中。       |
+   +----------+---------------------------------------------------------------------+
+   | RSET     | 重置 "mailfrom", "rcpttos", 和 "received_data" ，但不重置问候语。   |
+   +----------+---------------------------------------------------------------------+
+   | DATA     | 将内部状态设为 "DATA" 并将来自客户端的剩余行保存在 "received_data"  |
+   |          | 中直至接收到终止符 ""\r\n.\r\n""。                                  |
+   +----------+---------------------------------------------------------------------+
+   | HELP     | 返回有关命令语法的最少信息                                          |
+   +----------+---------------------------------------------------------------------+
+   | VRFY     | 返回代码252（服务器不知道该地址是否有效）                           |
+   +----------+---------------------------------------------------------------------+
+   | EXPN     | 报告该命令未实现。                                                  |
+   +----------+---------------------------------------------------------------------+

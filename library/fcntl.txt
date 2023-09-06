@@ -1,0 +1,152 @@
+"fcntl" —— 系统调用 "fcntl" 和 "ioctl"
+**************************************
+
+======================================================================
+
+本模块基于文件描述符来进行文件控制和 I/O 控制。它是 Unix 系统调用
+"fcntl()" 和 "ioctl()" 的接口。关于这些调用的完整描述，请参阅 Unix 手
+册的 *fcntl(2)* 和 *ioctl(2)* 页面。
+
+本模块的所有函数都接受文件描述符 *fd* 作为第一个参数。可以是一个整数形
+式的文件描述符，比如 "sys.stdin.fileno()" 的返回结果，或为 "io.IOBase"
+对象，比如 "sys.stdin" 提供一个 "fileno()"，可返回一个真正的文件描述符
+。
+
+在 3.3 版更改: 本模块的操作以前触发的是 "IOError"，现在则会触发
+"OSError"。
+
+在 3.8 版更改: fcntl 模块现在有了 "F_ADD_SEALS" 、"F_GET_SEALS"  和
+"F_SEAL_*" 常量，用于文件描述符 "os.memfd_create()" 的封装。
+
+在 3.9 版更改: 在 macOS 上，fcntl 模块提供了 "F_GETPATH" 常量，从文件
+描述符获取文件的路径。 在 Linux(>=3.15) 上，fcntl 模块提供了
+"F_OFD_GETLK", "F_OFD_SETLK" 和 "F_OFD_SETLKW" 常量，它们将在处理打开
+文件描述锁时被使用。
+
+在 3.10 版更改: 在 Linux 2.6.11 以上版本中，fcntl 模块提供了
+"F_GETPIPE_SZ" 和``F_SETPIPE_SZ`` 常量，分别用于检查和修改管道的大小。
+
+这个模块定义了以下函数：
+
+fcntl.fcntl(fd, cmd, arg=0)
+
+   对文件描述符 *fd* 执行 *cmd* 操作（能够提供 "fileno()" 方法的文件对
+   象也可以接受）。 *cmd* 可用的值与操作系统有关，在 "fcntl" 模块中可
+   作为常量使用，名称与相关 C 语言头文件中的一样。参数 *arg* 可以是整
+   数或 "bytes" 对象。若为整数值，则本函数的返回值是 C 语言  "fcntl()"
+   调用的整数返回值。若为字节串，则其代表一个二进制结构，比如由
+   "struct.pack()" 创建的数据。该二进制数据将被复制到一个缓冲区，缓冲
+   区地址传给 C 调用 "fcntl()"。调用成功后的返回值位于缓冲区内，转换为
+   一个 "bytes" 对象。返回的对象长度将与 *arg* 参数的长度相同。上限为
+   1024 字节。如果操作系统在缓冲区中返回的信息大于 1024 字节，很可能导
+   致内存段冲突，或更为不易察觉的数据错误。
+
+   如果 "fcntl()" 调用失败，会触发 "OSError" 。
+
+   引发一条 auditing 事件 "fcntl.fcntl"，参数为 "fd" 、"cmd"、"arg"。
+
+fcntl.ioctl(fd, request, arg=0, mutate_flag=True)
+
+   本函数与 "fcntl()" 函数相同，只是参数的处理更加复杂。
+
+   *request* 参数的上限是 32位。"termios" 模块中包含了可用作 *request*
+   参数其他常量，名称与相关 C 头文件中定义的相同。
+
+   参数 *arg* 可为整数、支持只读缓冲区接口的对象（如 "bytes" ）或支持
+   读写缓冲区接口的对象（如 "bytearray" ）。
+
+   除了最后一种情况，其他情况下的行为都与 "fcntl()" 函数一样。
+
+   如果传入的是个可变缓冲区，那么行为就由 *mutate_flag* 参数决定。
+
+   如果 *mutate_flag*  为 False，缓冲区的可变性将被忽略，行为与只读缓
+   冲区一样，只是没有了上述 1024 字节的上限——只要传入的缓冲区能容纳操
+   作系统放入的数据即可。
+
+   如果 *mutate_flag* 为 True（默认值），那么缓冲区（实际上）会传给底
+   层的 系统调用 "ioctl()" ，其返回代码则会回传给调用它的 Python，而缓
+   冲区的新数据则反映了 "ioctl()" 的运行结果。这里做了一点简化，因为若
+   是给出的缓冲区少于 1024 字节，首先会被复制到一个 1024 字节长的静态
+   缓冲区再传给  "ioctl()" ，然后把结果复制回给出的缓冲区去。
+
+   如果 "ioctl()" 调用失败，则会触发 "OSError" 异常。
+
+   举个例子：
+
+      >>> import array, fcntl, struct, termios, os
+      >>> os.getpgrp()
+      13341
+      >>> struct.unpack('h', fcntl.ioctl(0, termios.TIOCGPGRP, "  "))[0]
+      13341
+      >>> buf = array.array('h', [0])
+      >>> fcntl.ioctl(0, termios.TIOCGPGRP, buf, 1)
+      0
+      >>> buf
+      array('h', [13341])
+
+   触发一条 auditing 事件 "fcntl.ioctl"，参数为 "fd" 、"request" 、
+   "arg"。
+
+fcntl.flock(fd, operation)
+
+   在文件描述符 *fd* 上执行加锁操作 *operation* (也接受能提供
+   "fileno()" 方法的文件对象)。 详见 Unix 手册  *flock(2)*。 (在某些系
+   统中，此函数是用 "fcntl()" 模拟出来的。)
+
+   如果 "flock()" 调用失败，就会触发 "OSError" 异常。
+
+   触发一条 审计事件 "fcntl.flock"，参数为 "fd" 、"operation"。
+
+fcntl.lockf(fd, cmd, len=0, start=0, whence=0)
+
+   本质上是对 "fcntl()" 加锁调用的封装。*fd* 是要加解锁的文件描述符（
+   也接受能提供 "fileno()" 方法的文件对象），*cmd* 是以下值之一：
+
+   * "LOCK_UN" ——解锁
+
+   * "LOCK_SH" —— 获取一个共享锁
+
+   * "LOCK_EX" —— 获取一个独占锁
+
+   如果 *cmd* 为 "LOCK_SH" 或 "LOCK_EX"，则还可以与 "LOCK_NB" 进行按位
+   或运算，以避免在获取锁时出现阻塞。 如果用了 "LOCK_NB"，无法获取锁时
+   将触发 "OSError"，此异常的 *errno* 属性将被设为 "EACCES" 或
+   "EAGAIN" (视操作系统而定；为了保证可移植性，请检查这两个值)。 至少
+   在某些系统上，只有当文件描述符指向需要写入而打开的文件时，才可以使
+   用 "LOCK_EX"。
+
+   *len* 是要锁定的字节数，*start* 是自 *whence* 开始锁定的字节偏移量
+   ，*whence* 与 "io.IOBase.seek()" 的定义一样。
+
+   * "0" —— 自文件起始位置（"os.SEEK_SET"）。
+
+   * "1" —— 自缓冲区当前位置（ "os.SEEK_CUR" ）
+
+   * "2"—— 自文件末尾（"os.SEEK_END")
+
+   *start* 的默认值为 0，表示从文件起始位置开始。*len* 的默认值是 0，
+   表示加锁至文件末尾。 *whence* 的默认值也是 0。
+
+   触发一条 审计事件 "fcntl.lockf"，参数为 "fd" 、 "cmd"、 "len"、
+   "start"、 "whence"。
+
+示例（都是运行于符合 SVR4 的系统）：
+
+   import struct, fcntl, os
+
+   f = open(...)
+   rv = fcntl.fcntl(f, fcntl.F_SETFL, os.O_NDELAY)
+
+   lockdata = struct.pack('hhllhh', fcntl.F_WRLCK, 0, 0, 0, 0, 0)
+   rv = fcntl.fcntl(f, fcntl.F_SETLKW, lockdata)
+
+注意，在第一个例子中，返回值变量 *rv* 将存有整数；在第二个例子中，该变
+量中将存有一个 "bytes" 对象。*lockdata* 变量的结构布局视系统而定——因此
+采用 "flock()" 调用可能会更好。
+
+参见:
+
+  模块 "os"
+     如果 "os" 模块中存在加锁标志 "O_SHLOCK" 和 "O_EXLOCK" （仅在BSD上
+     ），那么 "os.open()" 函数提供了 "lockf()" 和 "flock()" 函数的替代
+     方案。

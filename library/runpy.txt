@@ -1,0 +1,137 @@
+"runpy" ——查找并执行 Python  模块
+*********************************
+
+**源代码：** Lib/runpy.py
+
+======================================================================
+
+"runpy" 模块用于找到并运行 Python 的模块，而无需首先导入。主要用于实现
+"-m" 命令行开关，以允许用 Python 模块命名空间而不是文件系统来定位脚本
+。
+
+请注意，这 *并非* 一个沙盒模块——所有代码都在当前进程中运行，所有副作用
+（如其他模块对导入操作进行了缓存）在函数返回后都会留存。
+
+此外，在 "runpy" 函数返回后，任何由已执行代码定义的函数和类都不能保证
+正确工作。如果某使用场景不能接收此限制，那么选用 "importlib" 可能更合
+适些。
+
+"runpy" 模块提供两个函数：
+
+runpy.run_module(mod_name, init_globals=None, run_name=None, alter_sys=False)
+
+   执行给定模块的代码，并返回结果模块的 globals 字典。 该模块的代码首
+   先会用标准的导入机制去查找定位 (详情请参阅 **PEP 302**)，然后在全新
+   的模块命名空间中运行。
+
+   参数 *mod_name* 应该是一个绝对模块名。如果模块名指向一个包，而不是
+   普通的模块，那么该包会被导入，然后执行包中的 "__main__" 子模块，并
+   返回结果模块的 globals 字典。
+
+   可选的字典参数 *init_globals* 可用来在代码执行前预填充模块的
+   globals 字典。给出的字典参数不会被修改。如果字典中定义了以下任意一
+   个特殊全局变量，这些定义都会被 "run_module()" 覆盖。
+
+   The special global variables "__name__", "__spec__", "__file__",
+   "__cached__", "__loader__" and "__package__" are set in the globals
+   dictionary before the module code is executed (Note that this is a
+   minimal set of variables - other variables may be set implicitly as
+   an interpreter implementation detail).
+
+   若可选参数 "__name__" 不为 "None" 则设为 *run_name*，若此名称的模块
+   是一个包则设为 "mod_name + '.__main__'"，否则设为 *mod_name* 参数。
+
+   "__spec__" 将设为合适的 *实际* 导入模块（也就是说，"__spec__.name"
+   一定是 *mod_name* 或  "mod_name + '.__main__"，而不是 *run_name*）
+   。
+
+   "__file__" 、"__cached__"、 "__loader__" 和 "__package__" 根据模块
+   规格进行 常规设置
+
+   如果给出了参数 *alter_sys* 并且值为 "True"，那么 "sys.argv[0]" 将被
+   更新为 "__file__" 的值，"sys.modules[__name__]" 将被更新为临时模块
+   对象。在函数返回前， "sys.argv[0]" 和 "sys.modules[__name__]" 将会
+   复原。
+
+   注意，这种对 "sys" 的操作不是线程安全的。其他线程可能会看到初始化不
+   完整的模块，以及变动后的参数列表。如果从线程中的代码调用此函数，建
+   议单实例运行 "sys" 模块。
+
+   参见: "-m" 选项由命令行提供相同功能。
+
+   在 3.1 版更改: 加入了 查找 "__main__" 子模块并执行软件包的能力。
+
+   在 3.2 版更改: 加入了 "__cached__" 全局变量（参见  **PEP 3147** ）
+   。
+
+   在 3.4 版更改: 充分利用 **PEP 451** 加入的模块规格功能。使得以这种
+   方式运行的模块能够正确设置 "__cached__"，并确保真正的模块名称总是可
+   以通过 "__spec__.name" 的形式访问。
+
+runpy.run_path(path_name, init_globals=None, run_name=None)
+
+   执行指定位置的代码，并返回结果模块的 globals 字典。与提供给 CPython
+   命令行的脚本名称一样，给出的路径可以指向 Python 源文件、编译过的字
+   节码文件或包含``__main__`` 模块的有效 sys.path 项（例如一个包含顶级
+   ``__main__.py`` 文件的 zip 文件）。
+
+   对于直接的脚本而言，指定代码将直接在一个新的模块命名空间中运行。对
+   于一个有效的 sys.path 项（通常是一个 zip 文件或目录），其首先会被添
+   加到 "sys.path" 的开头。然后，本函数用更新后的路径查找并执行
+   "__main__"  模块。请注意，即便在指定位置不存在主模块，也没有特别的
+   保护措施来防止调用存在于 "sys.path" 其他地方的  "__main__"。
+
+   利用可选的字典参数 *init_globals* ，可在代码执行前预填模块的
+   globals 字典。给出的字典参数不会被修改。如果给出的字典中定义了下列
+   特殊全局变量，这些定义均会被 "run_module()" 覆盖。
+
+   The special global variables "__name__", "__spec__", "__file__",
+   "__cached__", "__loader__" and "__package__" are set in the globals
+   dictionary before the module code is executed (Note that this is a
+   minimal set of variables - other variables may be set implicitly as
+   an interpreter implementation detail).
+
+   如果该可选参数不为 "None"，则 "__name__" 被设为 *run_name*，否则为
+   "'<run_path>'"。
+
+   如果提供的路径直接引用了一个脚本文件（无论是源码文件还是预编译的字
+   节码），那么 "__file__" 将设为给出的路径，而 "__spec__"、
+   "__cached__"、"__loader__" 和 "__package__" 都将设为 "None"。
+
+   如果给出的路径是对有效 sys.path 项的引用，那么 "__spec__" 将为导入
+   的 "__main__" 模块进行正确设置 (也就是说，"__spec__.name" 将一定是
+   "__main__")。 "__file__", "__cached__", "__loader__" 和
+   "__package__" 将依据模块规格 进行常规设置。
+
+   "sys" 模块也做了一些改动。 首先，"sys.path" 可能做上文所述的的修改
+   。 "sys.argv[0]" 会被更新为 "path_name" 的值而
+   "sys.modules[__name__]" 会被更新为对应于正在被执行的模块的临时模块
+   对象。 在函数返回之前对 "sys" 中条目的所有修改都会被复原。
+
+   注意，与 "run_module()" 不同的是，本函数对 "sys" 的修改不是可有可无
+   的，因为这些调整对于 sys.path 项能够顺利执行至关重要。由于依然存在
+   线程安全的限制，在线程代码中使用本函数时应采用导入锁进行序列运行，
+   或者委托给一个单独的进程。
+
+   参见: 接口选项 用于在命令行上实现同等功能（"python path/to/script"）。
+
+   3.2 新版功能.
+
+   在 3.4 版更改: 已作更新，以便充分利用 **PEP 451** 加入的模块规格功
+   能。使得从有效 sys.path 项导入``__main__`` 而不是直接执行的情况下，
+   能够正确设置 "__cached__"。
+
+参见:
+
+  **PEP 338** -- 将模块作为脚本执行
+     PEP 由 Nick Coghlan 撰写并实现。
+
+  **PEP 366** ——主模块的显式相对导入
+     PEP 由 Nick Coghlan 撰写并实现。
+
+  **PEP 451** —— 导入系统采用的 ModuleSpec 类型
+     PEP 由  Eric Snow 撰写并实现。
+
+  命令行与环境 —— CPython 命令行详解
+
+  "importlib.import_module()" 函数
